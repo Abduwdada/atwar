@@ -60,6 +60,9 @@ export function Tree() {
   const [showInf, setShowInf] = useState(true)
   const [showDec, setShowDec] = useState(true)
   const withTexts = new Set(passages.map(p => p.bookId))
+  // لون لكل مذهب، بترتيب أول ظهوره زمنياً
+  const schools = [...new Set(books.map(b => b.school || 'غير محدد'))]
+  const colorOf = (s?: string) => `var(--cat-${(schools.indexOf(s || 'غير محدد') % 6) + 1})`
 
   if (!books.length) return <><PageHead title="شجرة الكتب" /><div className="empty card">أضف كتباً ونصوصاً لتظهر الشجرة.</div></>
 
@@ -96,6 +99,7 @@ export function Tree() {
       <div className="legend">
         <label className="check"><input id="tg-inf" type="checkbox" checked={showInf} onChange={e => setShowInf(e.target.checked)} /><span className="swl" />مستنتجة من النصوص</label>
         <label className="check"><input id="tg-dec" type="checkbox" checked={showDec} onChange={e => setShowDec(e.target.checked)} /><span className="swl dash" />معلنة</label>
+        {schools.map(s => <span key={s}><i className="sw-dot" style={{ background: colorOf(s) }} />{s}</span>)}
       </div>
       <div className="svgwrap">
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="شجرة الكتب على خط زمني">
@@ -134,7 +138,7 @@ export function Tree() {
             return (
               <g key={id} className={'node' + (sel === id ? ' sel' : '')} tabIndex={0} role="button" aria-label={b.title}
                 onClick={() => setSel(id)} onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSel(id)}>
-                <circle cx={p.x} cy={p.y} r="8" fill={has ? 'var(--accent)' : 'var(--surface)'} style={has ? undefined : { stroke: 'var(--accent)', strokeDasharray: '3 2' }} />
+                <circle cx={p.x} cy={p.y} r="8" fill={has ? colorOf(b.school) : 'var(--surface)'} style={has ? undefined : { stroke: colorOf(b.school), strokeDasharray: '3 2' }} />
                 <text x={p.x - 14} y={p.y + 1} textAnchor="end" fontFamily="var(--f-text)" fontSize="17" fontWeight="700" fill="var(--ink)">{b.title}</text>
                 <text x={p.x - 14} y={p.y + 18} textAnchor="end" fontFamily="var(--f-ui)" fontSize="11.5" fill="var(--muted)">{`${b.author} · ${ar(b.death)}هـ`}</text>
               </g>

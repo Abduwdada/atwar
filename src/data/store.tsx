@@ -1,12 +1,19 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from './db'
+import { db, datasetHash, exportAll, hasLocalWork, replaceAll, type Backup } from './db'
 import { SAMPLE_SCIENCE_ID } from './seed'
+import {
+  ConflictError, fetchPublished, getSync, getToken, publishRemote, pullRemote, remoteSha, setSync, setToken,
+  type SyncState,
+} from './remote'
 import type { Book, Issue, Link, Passage, Science } from './types'
 import { analyseScience, type ScienceAnalysis } from '../engine/analyse'
 
 interface Store {
   ready: boolean
+  loadError: string
+  // الزائر يرى البيانات المنشورة للقراءة فقط، والمؤلف يعمل على نسخته في الجهاز ثم ينشرها
+  canEdit: boolean
   sciences: Science[]
   science: Science | undefined
   setScienceId: (id: string) => void
@@ -18,6 +25,14 @@ interface Store {
   issueById: Map<string, Issue>
   analysis: ScienceAnalysis
   hasSample: boolean
+  // النشر
+  sync: SyncState | null
+  dirty: boolean
+  localWorkHidden: boolean // نصوص على هذا الجهاز لا تظهر لأن المؤلف لم يدخل
+  login: (token: string) => Promise<'pulled' | 'kept'>
+  logout: () => void
+  pull: () => Promise<void>
+  publish: (message: string, force?: boolean) => Promise<void>
 }
 
 const Ctx = createContext<Store | null>(null)
@@ -31,46 +46,115 @@ function readSaved() {
   }
 }
 
+const sortBooks = (b: Book[]) => [...b].sort((x, y) => x.death - y.death)
+const sortIssues = (i: Issue[]) => [...i].sort((x, y) => x.createdAt - y.createdAt)
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [scienceId, setScienceIdState] = useState(readSaved)
-  const setScienceId = (id: string) => {
+  const setScienceId = useCallback((id: string) => {
     setScienceIdState(id)
     try {
       localStorage.setItem(KEY, id)
     } catch {
       /* التفضيل يضيع فقط */
     }
-  }
+  }, [])
 
-  const sciences = useLiveQuery(() => db.sciences.orderBy('createdAt').toArray(), [])
-  const books = useLiveQuery(() => db.books.where({ scienceId }).sortBy('death'), [scienceId])
-  const issues = useLiveQuery(() => db.issues.where({ scienceId }).sortBy('createdAt'), [scienceId])
-  const passages = useLiveQuery(() => db.passages.where({ scienceId }).toArray(), [scienceId])
-  const links = useLiveQuery(() => db.links.where({ scienceId }).toArray(), [scienceId])
+  const [token, setTokenState] = useState(getToken)
+  const [sync, setSyncState] = useState(getSync)
+  const owner = !!token
 
-  // إن حُذف العلم المختار يُرجع إلى أول علم موجود
+  // نسخة الزائر: الملف المنشور كاملاً في الذاكرة
+  const [remote, setRemote] = useState<Backup | null>(null)
+  const [loadError, setLoadError] = useState('')
+  useEffect(() => {
+    if (owner || remote) return
+    fetchPublished().then(setRemote, e => setLoadError(e instanceof Error ? e.message : String(e)))
+  }, [owner, remote])
+
+  const [localWorkHidden, setLocalWorkHidden] = useState(false)
+  useEffect(() => {
+    if (!owner) hasLocalWork().then(setLocalWorkHidden, () => {})
+  }, [owner])
+
+  // نسخة المؤلف: قاعدة البيانات في الجهاز (لا تُفتح للزائر)
+  const lSciences = useLiveQuery(async () => (owner ? await db.sciences.orderBy('createdAt').toArray() : undefined), [owner])
+  const lBooks = useLiveQuery(async () => (owner ? await db.books.where({ scienceId }).sortBy('death') : undefined), [owner, scienceId])
+  const lIssues = useLiveQuery(async () => (owner ? await db.issues.where({ scienceId }).sortBy('createdAt') : undefined), [owner, scienceId])
+  const lPassages = useLiveQuery(async () => (owner ? await db.passages.where({ scienceId }).toArray() : undefined), [owner, scienceId])
+  const lLinks = useLiveQuery(async () => (owner ? await db.links.where({ scienceId }).toArray() : undefined), [owner, scienceId])
+  const localHash = useLiveQuery(async () => (owner ? datasetHash(await exportAll()) : undefined), [owner])
+
+  const sciences = owner ? lSciences : remote?.sciences
   useEffect(() => {
     if (sciences && sciences.length && !sciences.some(s => s.id === scienceId)) setScienceId(sciences[0].id)
-  }, [sciences, scienceId])
+  }, [sciences, scienceId, setScienceId])
+
+  const login = useCallback(async (t: string) => {
+    const sha = await remoteSha(t) // يتأكد أن المفتاح يصل إلى المستودع
+    setToken(t)
+    setTokenState(t)
+    // جهاز جديد بلا عمل خاص: تُجلب النسخة المنشورة مباشرة
+    if (!getSync() && !(await hasLocalWork())) {
+      const { data } = await pullRemote(t)
+      await replaceAll(data)
+      const s = { sha, hash: datasetHash(data), at: Date.now() }
+      setSync(s)
+      setSyncState(s)
+      return 'pulled'
+    }
+    return 'kept'
+  }, [])
+
+  const logout = useCallback(() => {
+    setToken(null)
+    setTokenState(null)
+    setRemote(null)
+  }, [])
+
+  const pull = useCallback(async () => {
+    if (!token) return
+    const { data, sha } = await pullRemote(token)
+    await replaceAll(data)
+    const s = { sha, hash: datasetHash(data), at: Date.now() }
+    setSync(s)
+    setSyncState(s)
+  }, [token])
+
+  const publish = useCallback(async (message: string, force = false) => {
+    if (!token) return
+    const current = await remoteSha(token)
+    if (!force && sync && current !== sync.sha) throw new ConflictError('نُشرت نسخة أحدث من جهاز آخر.')
+    const data = await exportAll()
+    const sha = await publishRemote(token, data, current, message)
+    const s = { sha, hash: datasetHash(data), at: Date.now() }
+    setSync(s)
+    setSyncState(s)
+  }, [token, sync])
 
   const value = useMemo<Store>(() => {
-    const b = books ?? []
-    const p = passages ?? []
+    const pick = <T extends { scienceId: string }>(xs: T[] | undefined) => (xs ?? []).filter(x => x.scienceId === scienceId)
+    const books = owner ? lBooks ?? [] : sortBooks(pick(remote?.books))
+    const issues = owner ? lIssues ?? [] : sortIssues(pick(remote?.issues))
+    const passages = owner ? lPassages ?? [] : pick(remote?.passages)
+    const links = owner ? lLinks ?? [] : pick(remote?.links)
+    const ready = owner ? !!(lSciences && lBooks && lIssues && lPassages && lLinks) : !!remote
     return {
-      ready: !!(sciences && books && issues && passages && links),
+      ready, loadError, canEdit: owner,
       sciences: sciences ?? [],
       science: sciences?.find(s => s.id === scienceId),
       setScienceId,
-      books: b,
-      issues: issues ?? [],
-      passages: p,
-      links: links ?? [],
-      bookById: new Map(b.map(x => [x.id, x])),
-      issueById: new Map((issues ?? []).map(x => [x.id, x])),
-      analysis: analyseScience(p, b),
-      hasSample: p.some(x => x.sample) || b.some(x => x.sample),
+      books, issues, passages, links,
+      bookById: new Map(books.map(x => [x.id, x])),
+      issueById: new Map(issues.map(x => [x.id, x])),
+      analysis: analyseScience(passages, books),
+      hasSample: passages.some(x => x.sample) || books.some(x => x.sample),
+      sync,
+      dirty: owner && !!localHash && localHash !== sync?.hash,
+      localWorkHidden: !owner && localWorkHidden,
+      login, logout, pull, publish,
     }
-  }, [sciences, scienceId, books, issues, passages, links])
+  }, [owner, remote, loadError, sciences, scienceId, setScienceId, lSciences, lBooks, lIssues, lPassages, lLinks, localHash, sync, localWorkHidden, login, logout, pull, publish])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

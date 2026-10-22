@@ -7,7 +7,7 @@ import { BookForm } from '../ui/forms'
 import * as Icon from '../ui/icons'
 
 export function BookList() {
-  const { books, passages } = useStore()
+  const { books, passages, canEdit } = useStore()
   const [q, setQ] = useState('')
   const [adding, setAdding] = useState(false)
   const nav = useNavigate()
@@ -22,7 +22,7 @@ export function BookList() {
   return (
     <>
       <PageHead title="الكتب" sub={`${count(books.length, 'كتاب', 'كتابان', 'كتب', 'كتاباً')}، مرتبة بسنة الوفاة`}
-        action={<button className="btn sm" onClick={() => setAdding(a => !a)}><Icon.Plus />كتاب</button>} />
+        action={canEdit && <button className="btn sm" onClick={() => setAdding(a => !a)}><Icon.Plus />كتاب</button>} />
       {adding && <BookForm onSaved={b => nav(`/books/${b.id}`)} onCancel={() => setAdding(false)} />}
       <div className="search"><Icon.Search /><input id="books-q" className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث بالعنوان أو المؤلف" /></div>
       {shown.length > 0 && (
@@ -37,7 +37,7 @@ export function BookList() {
           ))}
         </div>
       )}
-      {!books.length && !adding && <div className="empty card">لا توجد كتب بعد.</div>}
+      {!books.length && !adding && <div className="empty card">{canEdit ? 'لا توجد كتب بعد.' : 'لم تُنشر كتب بعد.'}</div>}
     </>
   )
 }
@@ -45,7 +45,7 @@ export function BookList() {
 export function BookPage() {
   const { id = '' } = useParams()
   const nav = useNavigate()
-  const { bookById, books, passages, links, analysis, issueById, science } = useStore()
+  const { bookById, books, passages, links, analysis, issueById, science, canEdit } = useStore()
   const book = bookById.get(id)
   const [editing, setEditing] = useState(false)
   const [linking, setLinking] = useState(false)
@@ -76,7 +76,7 @@ export function BookPage() {
     <>
       <PageHead back="/books" title={book.title}
         sub={[book.author, yr(book) + (book.deathNote ? ` (${book.deathNote})` : ''), book.school, book.kind].filter(Boolean).join(' · ')}
-        action={<button className="icon-btn" onClick={() => setEditing(e => !e)} aria-label="تعديل الكتاب"><Icon.Edit /></button>} />
+        action={canEdit && <button className="icon-btn" onClick={() => setEditing(e => !e)} aria-label="تعديل الكتاب"><Icon.Edit /></button>} />
       {editing && (
         <div className="stack tight">
           <BookForm book={book} onSaved={() => setEditing(false)} onCancel={() => setEditing(false)} />
@@ -84,7 +84,7 @@ export function BookPage() {
         </div>
       )}
 
-      <Link className="btn primary" to={`/add?book=${id}`}><Icon.Plus />نص من هذا الكتاب</Link>
+      {canEdit && <Link className="btn primary" to={`/add?book=${id}`}><Icon.Plus />نص من هذا الكتاب</Link>}
 
       <div className="card">
         <div className="section-label" style={{ margin: 0 }}>الأصل المستنتج من النصوص</div>
@@ -114,7 +114,7 @@ export function BookPage() {
       <div className="stack tight">
         <div className="page-head" style={{ minHeight: 0 }}>
           <div className="section-label" style={{ margin: 0 }}>الصلات المعلنة</div>
-          <button className="btn sm ghost" onClick={() => setLinking(l => !l)}><Icon.Plus />صلة</button>
+          {canEdit && <button className="btn sm ghost" onClick={() => setLinking(l => !l)}><Icon.Plus />صلة</button>}
         </div>
         {linking && <LinkForm bookId={id} scienceId={science!.id} onDone={() => setLinking(false)} />}
         {declared.length ? (
@@ -125,11 +125,11 @@ export function BookPage() {
                   <div className="title">{l.to === id ? <>أخذ عن <B bid={l.from} /></> : <>أخذ منه <B bid={l.to} /></>}</div>
                   {l.note && <div className="meta">{l.note}</div>}
                 </div>
-                <button className="icon-btn" onClick={() => db.links.delete(l.id)} aria-label="حذف الصلة"><Icon.Trash /></button>
+                {canEdit && <button className="icon-btn" onClick={() => db.links.delete(l.id)} aria-label="حذف الصلة"><Icon.Trash /></button>}
               </div>
             ))}
           </div>
-        ) : !linking && <span className="small muted">مثل: شرح، اختصار، أو نص المصنف في مقدمته على مصادره.</span>}
+        ) : !linking && <span className="small muted">{canEdit ? 'مثل: شرح، اختصار، أو نص المصنف في مقدمته على مصادره.' : 'لا صلات معلنة مسجلة لهذا الكتاب.'}</span>}
       </div>
 
       <div className="stack tight">

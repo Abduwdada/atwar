@@ -91,3 +91,40 @@ export async function importAll(data: unknown): Promise<number> {
   })
   return b.passages.length
 }
+
+// يستبدل كل ما على الجهاز بنسخة أخرى، ويُستعمل عند جلب البيانات المنشورة
+export async function replaceAll(b: Backup) {
+  await db.transaction('rw', [db.sciences, db.books, db.issues, db.passages, db.links], async () => {
+    await Promise.all([db.sciences.clear(), db.books.clear(), db.issues.clear(), db.passages.clear(), db.links.clear()])
+    await db.sciences.bulkAdd(b.sciences ?? [])
+    await db.books.bulkAdd(b.books ?? [])
+    await db.issues.bulkAdd(b.issues ?? [])
+    await db.passages.bulkAdd(b.passages ?? [])
+    await db.links.bulkAdd(b.links ?? [])
+  })
+}
+
+function canonical(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonical)
+  if (v && typeof v === 'object')
+    return Object.fromEntries(Object.keys(v).sort().filter(k => (v as Record<string, unknown>)[k] !== undefined)
+      .map(k => [k, canonical((v as Record<string, unknown>)[k])]))
+  return v
+}
+
+// بصمة المحتوى دون تاريخ التصدير، لمعرفة هل تغيّر شيء منذ آخر نشر
+export function datasetHash(b: Pick<Backup, 'sciences' | 'books' | 'issues' | 'passages' | 'links'>) {
+  const byId = <T extends { id: string }>(xs: T[] = []) => [...xs].sort((x, y) => (x.id < y.id ? -1 : 1))
+  const s = JSON.stringify(canonical({
+    sciences: byId(b.sciences), books: byId(b.books), issues: byId(b.issues), passages: byId(b.passages), links: byId(b.links),
+  }))
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(16) + ':' + s.length
+}
+
+// هل على هذا الجهاز نصوص كتبها صاحبه قبل تفعيل النشر؟
+export async function hasLocalWork() {
+  if (!(await Dexie.exists('atwar'))) return false
+  return (await db.passages.filter(p => !p.sample).count()) > 0
+}

@@ -26,7 +26,15 @@ export default defineConfig({
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml' },
         ],
       },
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,woff2}'] },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // آخر نسخة منشورة تبقى متاحة للزائر بلا إنترنت
+        runtimeCaching: [{
+          urlPattern: /^https:\/\/raw\.githubusercontent\.com\/Abduwdada\/atwar-data\//,
+          handler: 'NetworkFirst',
+          options: { cacheName: 'atwar-data', networkTimeoutSeconds: 6 },
+        }],
+      },
     }),
   ],
 })
