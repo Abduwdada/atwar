@@ -9,6 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false,
       includeAssets: ['icon.svg', 'icon-192.png'],
       manifest: {
         name: 'أطوار',
@@ -28,6 +29,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        clientsClaim: true,
+        skipWaiting: true,
+        cleanupOutdatedCaches: true,
         // آخر نسخة منشورة تبقى متاحة للزائر بلا إنترنت
         runtimeCaching: [{
           urlPattern: /^https:\/\/raw\.githubusercontent\.com\/Abduwdada\/atwar-data\//,
