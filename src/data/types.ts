@@ -9,6 +9,9 @@ export interface Science {
   // مواضع الكتب في الشجرة كما رتبها المؤلف بالسحب، لكل طريقة عرض على حدة
   treeLayout?: Record<string, { x: number; y: number }> // العمودي (الصيغة الأولى)
   treeLayoutH?: Record<string, { x: number; y: number }> // الأفقي
+  // انحناء كل سهم: إزاحة نقطة وسطه عن الخط المستقيم بين الكتابين
+  treeBends?: Record<string, { x: number; y: number }>
+  treeBendsH?: Record<string, { x: number; y: number }>
   // القوائم التي يختار منها المؤلف عند الإضافة، ويعدّلها من إعدادات العلم
   lists?: Partial<Record<ListKey, string[]>>
   thresholds?: Partial<Thresholds>

@@ -474,3 +474,8 @@ select.select { padding-right: 14px; line-height: 1.4; }
 .main { width: 100%; }
 .main, .science, .science > * { min-width: 0; }
 .svgwrap { max-width: 100%; }
+.tree-wrap { max-height: 78vh; overflow: auto; cursor: grab; }
+.tree-wrap.panning { cursor: grabbing; user-select: none; }
+.tree-wrap svg { display: block; }
+.bend-handle { cursor: move; touch-action: none; }
+.bend-handle:hover { stroke-width: 3; }

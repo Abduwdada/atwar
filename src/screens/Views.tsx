@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { db } from '../data/db'
 import * as Icon from '../ui/icons'
 import { sp } from '../nav'
@@ -76,24 +76,30 @@ const ORD = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'ال
 
 type Pt = { x: number; y: number }
 type View = 'v' | 'h' | 'list'
+type Drag =
+  | { kind: 'node'; id: string; dx: number; dy: number; moved: boolean }
+  | { kind: 'bend'; key: string; mid: Pt; moved: boolean }
+  | { kind: 'pan'; x: number; y: number; left: number; top: number }
 
 export function Tree() {
   const { books, links, analysis, passages, science, canEdit, issueById } = useStore()
   const [sel, setSel] = useState<string>('')
   const [o, set] = useListPrefs('tree', { view: 'v' as View, inf: true, dec: true })
   const [zoom, setZoom] = useState(1)
-  // مواضع يغيّرها الزائر بالسحب لنفسه، ومواضع المؤلف تُحفظ مع العلم وتُنشر
+  const [bending, setBending] = useState(false)
+  // ما يغيّره الزائر يبقى عنده مؤقتاً، وما يغيّره المؤلف يُحفظ مع العلم ويُنشر
   const [local, setLocal] = useState<Record<string, Pt>>({})
-  const [dragging, setDragging] = useState<{ id: string; dx: number; dy: number; moved: boolean } | null>(null)
+  const [localBends, setLocalBends] = useState<Record<string, Pt>>({})
+  const [drag, setDrag] = useState<Drag | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const fitted = useRef('')
   const withTexts = new Set(passages.map(p => p.bookId))
   const schools = [...new Set(books.map(b => b.school || 'غير محدد'))]
   const colorOf = (s?: string) => `var(--cat-${(schools.indexOf(s || 'غير محدد') % 6) + 1})`
   const view = o.view
-  const setView = (v: View) => { set('view', v); setLocal({}); setSel('') }
-
-  if (!books.length) return <div className="empty card">أضف كتباً ونصوصاً لتظهر الشجرة.</div>
+  const V = view === 'v'
+  const setView = (v: View) => { set('view', v); setLocal({}); setLocalBends({}); setSel(''); setBending(false) }
 
   // الترتيب التلقائي: محور الزمن خطوة لكل كتاب بسنة وفاته، ومحور الفروع يجعل الفروع متجاورة وأصلها في وسطها
   const row = new Map(books.map((b, i) => [b.id, i]))
@@ -113,7 +119,64 @@ export function Tree() {
   roots.forEach(b => place(b.id))
   const title = (id: string) => books.find(b => b.id === id)?.title ?? ''
   const century = (d: number) => Math.floor(d / 100)
-  const centuryLabel = (d: number) => `القرن ${ORD[century(d)] ?? ar(century(d) + 1)}`
+  const centuryLabel = (c: number) => `القرن ${ORD[c] ?? ar(c + 1)}`
+
+  const stepT = V ? 64 : 150, stepB = V ? 150 : 86
+  const gapT = V ? 58 : 140 // أدنى مسافة بين آخر كتاب في قرن وأول كتاب في الذي يليه
+  const toXY = (t: number, b: number): Pt => (V ? { x: -b, y: t } : { x: -t, y: b })
+  const tOf = (p: Pt) => (V ? p.y : -p.x)
+  const withT = (p: Pt, t: number): Pt => (V ? { x: p.x, y: t } : { x: -t, y: p.y })
+  const auto = (id: string) => toXY(row.get(id)! * stepT, col.get(id)! * stepB)
+  const layoutKey = V ? 'treeLayout' : 'treeLayoutH'
+  const bendKey = V ? 'treeBends' : 'treeBendsH'
+  const saved = (science?.[layoutKey] ?? {}) as Record<string, Pt>
+  const savedBends = (science?.[bendKey] ?? {}) as Record<string, Pt>
+  const pos = new Map(books.map(b => [b.id, local[b.id] ?? saved[b.id] ?? auto(b.id)]))
+  const bends = { ...savedBends, ...localBends }
+  const customized = Object.keys(local).length + Object.keys(saved).length + Object.keys(bends).length > 0
+
+  // نطاق كل قرن يمتد بين أول كتبه وآخرها، فيضيق إذا قُرّبت كتبه، والحد بين قرنين في منتصف الفراغ بينهما
+  const cents = [...new Set(books.map(b => century(b.death)))].sort((a, b) => a - b)
+  const ext = new Map(cents.map(c => {
+    const ts = books.filter(b => century(b.death) === c).map(b => tOf(pos.get(b.id)!))
+    return [c, [Math.min(...ts), Math.max(...ts)] as [number, number]]
+  }))
+  const bands = cents.map((c, i) => {
+    const [lo, hi] = ext.get(c)!
+    const a = i === 0 ? lo - stepT / 2 : (ext.get(cents[i - 1])![1] + lo) / 2
+    const b = i === cents.length - 1 ? hi + stepT / 2 : (hi + ext.get(cents[i + 1])![0]) / 2
+    return { c, a, b }
+  })
+  const clampT = (id: string, t: number) => {
+    const i = cents.indexOf(century(books.find(x => x.id === id)!.death))
+    const min = i > 0 ? ext.get(cents[i - 1])![1] + gapT : -Infinity
+    const max = i < cents.length - 1 ? ext.get(cents[i + 1])![0] - gapT : Infinity
+    return Math.min(max, Math.max(min, t))
+  }
+
+  const pts = [...pos.values()]
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y)
+  const bandT = bands.flatMap(b => [b.a, b.b])
+  const minX = V ? Math.min(...xs) - 200 : Math.min(...xs, -Math.max(...bandT)) - 60
+  const maxX = V ? Math.max(...xs) + 120 : Math.max(...xs, -Math.min(...bandT)) + 60
+  const minY = V ? Math.min(...ys, ...bandT) - 6 : Math.min(...ys) - 60
+  const maxY = V ? Math.max(...ys, ...bandT) + 6 : Math.max(...ys) + 56
+  const W = maxX - minX, H = maxY - minY
+
+  // الملاءمة: يدخل الرسم كله في عرض الإطار وارتفاع الشاشة
+  const fit = () => {
+    const w = wrapRef.current?.clientWidth
+    if (!w) return
+    const h = Math.max(320, window.innerHeight * 0.68)
+    setZoom(Math.max(0.25, Math.min(1.3, (w - 4) / W, h / H)))
+  }
+  useEffect(() => {
+    const k = `${view}:${books.length}`
+    if (view !== 'list' && fitted.current !== k) { fitted.current = k; fit() }
+  })
+  const step = (f: number) => setZoom(z => Math.max(0.25, Math.min(2.5, +(z * f).toFixed(2))))
+
+  if (!books.length) return <div className="empty card">أضف كتباً ونصوصاً لتظهر الشجرة.</div>
 
   const viewSwitch = (
     <div className="seg" role="radiogroup" aria-label="طريقة العرض">
@@ -147,80 +210,112 @@ export function Tree() {
     )
   }
 
-  const V = view === 'v'
-  const stepT = V ? 64 : 150, stepB = V ? 150 : 86
-  const toXY = (t: number, b: number): Pt => (V ? { x: -b, y: t } : { x: -t, y: b })
-  const tOf = (p: Pt) => (V ? p.y : -p.x)
-  const auto = (id: string) => toXY(row.get(id)! * stepT, col.get(id)! * stepB)
-  const saved = (V ? science?.treeLayout : science?.treeLayoutH) ?? {}
-  const pos = new Map(books.map(b => [b.id, local[b.id] ?? saved[b.id] ?? auto(b.id)]))
-  const customized = Object.keys(local).length > 0 || Object.keys(saved).length > 0
-
-  // نطاق كل قرن على محور الزمن، ولا يخرج الكتاب المسحوب من نطاق قرنه
-  const bands = new Map<number, [number, number]>()
-  books.forEach((b, i) => {
-    const c = century(b.death), cur = bands.get(c)
-    bands.set(c, [cur ? cur[0] : i * stepT - stepT / 2, i * stepT + stepT / 2])
-  })
-  const clampT = (id: string, t: number) => {
-    const [a, b] = bands.get(century(books.find(x => x.id === id)!.death))!
-    // هامش يبقي اسم الكتاب نفسه داخل نطاق قرنه
-    const [lo, hi] = V ? [16, 28] : [55, 55]
-    return Math.min(b - hi, Math.max(a + lo, t))
+  // السهم: منحنى افتراضي، أو منحنى يمر بنقطة الوسط التي حرّكها المستخدم
+  const ends = (a: Pt, b: Pt, toward?: Pt) => {
+    const dirTo = (p: Pt, q: Pt) => { const dx = q.x - p.x, dy = q.y - p.y, l = Math.hypot(dx, dy) || 1; return { x: p.x + dx / l * 11, y: p.y + dy / l * 11 } }
+    return toward ? [dirTo(a, toward), dirTo(b, toward)] : null
   }
-
-  const xs = [...pos.values()].map(p => p.x), ys = [...pos.values()].map(p => p.y)
-  const allT = [...bands.values()].flat()
-  const minX = V ? Math.min(...xs) - 200 : Math.min(...xs, -Math.max(...allT)) - 70
-  const maxX = V ? Math.max(...xs) + 120 : Math.max(...xs, -Math.min(...allT)) + 70
-  const minY = V ? Math.min(...ys, Math.min(...allT)) - 8 : Math.min(...ys) - 60
-  const maxY = V ? Math.max(...ys, Math.max(...allT)) + 8 : Math.max(...ys) + 56
-  const W = maxX - minX, H = maxY - minY
-
-  const curve = (a: Pt, b: Pt, bend: number) => {
-    if (V) {
-      const down = b.y >= a.y, y1 = a.y + (down ? 11 : -11), y2 = b.y + (down ? -11 : 11), d = (y2 - y1) / 2
-      return `M${a.x},${y1} C${a.x + bend},${y1 + d} ${b.x + bend},${y2 - d} ${b.x},${y2}`
+  const midOf = (a: Pt, b: Pt) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
+  const edgePath = (key: string, a: Pt, b: Pt, bend: number) => {
+    const off = bends[key]
+    if (off) {
+      const hp = { x: midOf(a, b).x + off.x, y: midOf(a, b).y + off.y }
+      const [s, e] = ends(a, b, hp)!
+      const c = { x: 2 * hp.x - (s.x + e.x) / 2, y: 2 * hp.y - (s.y + e.y) / 2 }
+      return { d: `M${s.x},${s.y} Q${c.x},${c.y} ${e.x},${e.y}`, handle: hp }
     }
-    const left = b.x <= a.x, x1 = a.x + (left ? -11 : 11), x2 = b.x + (left ? 11 : -11), d = (x2 - x1) / 2
-    return `M${x1},${a.y} C${x1 + d},${a.y + bend} ${x2 - d},${b.y + bend} ${x2},${b.y}`
+    if (V) {
+      const down = b.y >= a.y, y1 = a.y + (down ? 11 : -11), y2 = b.y + (down ? -11 : 11), dd = (y2 - y1) / 2
+      return { d: `M${a.x},${y1} C${a.x + bend},${y1 + dd} ${b.x + bend},${y2 - dd} ${b.x},${y2}`, handle: { x: midOf(a, b).x + bend * 0.75, y: midOf(a, b).y } }
+    }
+    const left = b.x <= a.x, x1 = a.x + (left ? -11 : 11), x2 = b.x + (left ? 11 : -11), dd = (x2 - x1) / 2
+    return { d: `M${x1},${a.y} C${x1 + dd},${a.y + bend} ${x2 - dd},${b.y + bend} ${x2},${b.y}`, handle: { x: midOf(a, b).x, y: midOf(a, b).y + bend * 0.75 } }
   }
+  const edges = [
+    ...(o.dec ? links.filter(l => pos.has(l.from) && pos.has(l.to)).map(l => ({ key: 'l:' + l.id, from: l.from, to: l.to, declared: true, weight: 0, tip: `${title(l.from)} ← ${title(l.to)}${l.note ? ': ' + l.note : ''}` })) : []),
+    ...(o.inf ? analysis.edges.map(e => ({ key: e.from + '>' + e.to, from: e.from, to: e.to, declared: false, weight: e.weight, tip: `${title(e.from)} ← ${title(e.to)}: ${e.items.map(i => pct(i.sim)).join('، ')}` })) : []),
+  ]
 
   const toSvg = (e: React.PointerEvent): Pt => {
     const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svgRef.current!.getScreenCTM()!.inverse())
     return { x: p.x, y: p.y }
   }
-  function onDown(e: React.PointerEvent, id: string) {
+  function startNode(e: React.PointerEvent, id: string) {
+    e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
     const p = toSvg(e), cur = pos.get(id)!
-    setDragging({ id, dx: p.x - cur.x, dy: p.y - cur.y, moved: false })
+    setDrag({ kind: 'node', id, dx: p.x - cur.x, dy: p.y - cur.y, moved: false })
+  }
+  function startBend(e: React.PointerEvent, key: string, a: Pt, b: Pt) {
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setDrag({ kind: 'bend', key, mid: midOf(a, b), moved: false })
+  }
+  function startPan(e: React.PointerEvent) {
+    if (e.pointerType !== 'mouse' || !wrapRef.current) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setDrag({ kind: 'pan', x: e.clientX, y: e.clientY, left: wrapRef.current.scrollLeft, top: wrapRef.current.scrollTop })
   }
   function onMove(e: React.PointerEvent) {
-    if (!dragging) return
+    if (!drag) return
+    if (drag.kind === 'pan') {
+      const w = wrapRef.current!
+      w.scrollLeft = drag.left - (e.clientX - drag.x)
+      w.scrollTop = drag.top - (e.clientY - drag.y)
+      return
+    }
     const p = toSvg(e)
-    let next = { x: Math.round(p.x - dragging.dx), y: Math.round(p.y - dragging.dy) }
-    const t = clampT(dragging.id, tOf(next))
-    next = V ? { x: next.x, y: t } : { x: -t, y: next.y }
-    const cur = pos.get(dragging.id)!
-    if (!dragging.moved && Math.hypot(next.x - cur.x, next.y - cur.y) < 4) return
-    setDragging({ ...dragging, moved: true })
-    setLocal(l => ({ ...l, [dragging.id]: next }))
+    if (drag.kind === 'bend') {
+      setDrag({ ...drag, moved: true })
+      setLocalBends(l => ({ ...l, [drag.key]: { x: Math.round(p.x - drag.mid.x), y: Math.round(p.y - drag.mid.y) } }))
+      return
+    }
+    const raw = { x: Math.round(p.x - drag.dx), y: Math.round(p.y - drag.dy) }
+    const next = withT(raw, clampT(drag.id, tOf(raw)))
+    const cur = pos.get(drag.id)!
+    if (!drag.moved && Math.hypot(next.x - cur.x, next.y - cur.y) < 4) return
+    setDrag({ ...drag, moved: true })
+    setLocal(l => ({ ...l, [drag.id]: next }))
   }
-  async function onUp(id: string) {
-    const d = dragging
-    setDragging(null)
-    if (!d?.moved) return setSel(id)
-    if (canEdit && science) {
-      await db.sciences.update(science.id, { [V ? 'treeLayout' : 'treeLayoutH']: { ...saved, [id]: local[id] } })
-      setLocal(l => { const rest = { ...l }; delete rest[id]; return rest })
+  async function onUp() {
+    const d = drag
+    setDrag(null)
+    if (!d || d.kind === 'pan') return
+    if (d.kind === 'node' && !d.moved) return setSel(d.id)
+    if (!canEdit || !science || !d.moved) return
+    if (d.kind === 'node') {
+      await db.sciences.update(science.id, { [layoutKey]: { ...saved, [d.id]: local[d.id] } })
+      setLocal(l => { const r = { ...l }; delete r[d.id]; return r })
+    } else {
+      await db.sciences.update(science.id, { [bendKey]: { ...savedBends, [d.key]: localBends[d.key] } })
+      setLocalBends(l => { const r = { ...l }; delete r[d.key]; return r })
     }
   }
-  async function resetLayout() {
-    setLocal({})
-    if (canEdit && science) await db.sciences.update(science.id, { [V ? 'treeLayout' : 'treeLayoutH']: undefined })
+  async function straighten(key: string) {
+    setLocalBends(l => { const r = { ...l }; delete r[key]; return r })
+    if (canEdit && science && savedBends[key]) {
+      const r = { ...savedBends }
+      delete r[key]
+      await db.sciences.update(science.id, { [bendKey]: r })
+    }
   }
-  const fit = () => { const w = wrapRef.current?.clientWidth; if (w) setZoom(Math.max(0.3, Math.min(2, (w - 2) / W))) }
-  const step = (f: number) => setZoom(z => Math.max(0.3, Math.min(2.5, +(z * f).toFixed(2))))
+  // ضغط الفراغات: يقرّب كل قرن من الذي قبله إلى أدنى مسافة، مع حفظ ترتيب كتبه داخله
+  async function compact() {
+    const next: Record<string, Pt> = {}
+    let prevMax = -Infinity
+    for (const c of cents) {
+      const [lo, hi] = ext.get(c)!
+      const shift = prevMax === -Infinity ? 0 : prevMax + gapT - lo
+      books.filter(b => century(b.death) === c).forEach(b => { const p = pos.get(b.id)!; next[b.id] = withT(p, tOf(p) + shift) })
+      prevMax = hi + shift
+    }
+    if (canEdit && science) { setLocal({}); await db.sciences.update(science.id, { [layoutKey]: next }) }
+    else setLocal(next)
+  }
+  async function resetLayout() {
+    setLocal({}); setLocalBends({})
+    if (canEdit && science) await db.sciences.update(science.id, { [layoutKey]: undefined, [bendKey]: undefined })
+  }
 
   return (
     <>
@@ -230,56 +325,55 @@ export function Tree() {
           <button className="icon-btn" onClick={() => step(1 / 1.2)} aria-label="تصغير"><Icon.Minus /></button>
           <span className="num small">{ar(Math.round(zoom * 100))}٪</span>
           <button className="icon-btn" onClick={() => step(1.2)} aria-label="تكبير"><Icon.Plus /></button>
-          <button className="btn sm" onClick={fit}>ملاءمة الشاشة</button>
+          <button className="btn sm" onClick={fit}>ملاءمة</button>
         </span>
+        <button className={'btn sm' + (bending ? ' primary' : '')} onClick={() => setBending(b => !b)}>{bending ? 'تم' : 'ثني الأسهم'}</button>
+        <button className="btn sm" onClick={compact}>ضغط الفراغات</button>
         {customized && <button className="btn sm ghost" onClick={resetLayout}>الترتيب التلقائي</button>}
       </div>
       <div className="legend">
         <label className="check"><input id="tg-inf" type="checkbox" checked={o.inf} onChange={e => set('inf', e.target.checked)} /><span className="swl" />مستنتجة من النصوص</label>
         <label className="check"><input id="tg-dec" type="checkbox" checked={o.dec} onChange={e => set('dec', e.target.checked)} /><span className="swl dash" />معلنة</label>
         {schools.map(s => <span key={s}><i className="sw-dot" style={{ background: colorOf(s) }} />{s}</span>)}
-        <span className="muted">اسحب أي كتاب لتحريكه داخل قرنه.{canEdit ? ' ترتيبك يُحفظ ويُنشر للزوار.' : ''}</span>
       </div>
-      <div className="svgwrap" ref={wrapRef}>
-        <svg ref={svgRef} viewBox={`${minX} ${minY} ${W} ${H}`} style={{ width: W * zoom, minWidth: 0, height: 'auto' }}
-          role="img" aria-label={V ? 'شجرة الكتب، الأقدم في الأعلى' : 'شجرة الكتب، الأقدم على اليمين'} onPointerMove={onMove}>
+      <p className="small muted" style={{ margin: 0 }}>
+        {bending ? 'اسحب النقطة في وسط أي سهم لثنيه، واضغطها مرتين لإرجاعه مستقيماً.' : 'اسحب أي كتاب لتحريكه داخل قرنه، واسحب الفراغ لتحريك الرسم.'}
+        {canEdit ? ' ما ترتبه يُحفظ ويُنشر للزوار.' : ''}
+      </p>
+      <div className={'svgwrap tree-wrap' + (drag?.kind === 'pan' ? ' panning' : '')} ref={wrapRef}>
+        <svg ref={svgRef} viewBox={`${minX} ${minY} ${W} ${H}`} style={{ width: W * zoom, minWidth: 0, height: H * zoom }}
+          role="img" aria-label={V ? 'شجرة الكتب، الأقدم في الأعلى' : 'شجرة الكتب، الأقدم على اليمين'}
+          onPointerDown={startPan} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => setDrag(null)}>
           <defs>
             <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)" /></marker>
             <marker id="arG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--gold)" /></marker>
           </defs>
-          {[...bands.entries()].map(([c, [a, b]], i) => V ? (
+          {bands.map(({ c, a, b }, i) => V ? (
             <g key={c}>
-              {i % 2 === 1 && <rect x={minX} y={a} width={W} height={b - a} fill="var(--sunken)" opacity="0.5" />}
-              <text x={maxX - 12} y={a + 22} textAnchor="end" fontSize="12.5" fontWeight="600" fill="var(--muted)" fontFamily="var(--f-ui)">{centuryLabel(c * 100)}</text>
+              {i % 2 === 1 && <rect x={minX} y={a} width={W} height={b - a} fill="var(--sunken)" opacity="0.6" />}
+              <text x={maxX - 12} y={a + 20} textAnchor="end" fontSize="12.5" fontWeight="600" fill="var(--muted)" fontFamily="var(--f-ui)">{centuryLabel(c)}</text>
             </g>
           ) : (
             <g key={c}>
-              {i % 2 === 1 && <rect x={-b} y={minY} width={b - a} height={H} fill="var(--sunken)" opacity="0.5" />}
-              <text x={-a - 8} y={minY + 22} textAnchor="end" fontSize="12.5" fontWeight="600" fill="var(--muted)" fontFamily="var(--f-ui)">{centuryLabel(c * 100)}</text>
+              {i % 2 === 1 && <rect x={-b} y={minY} width={b - a} height={H} fill="var(--sunken)" opacity="0.6" />}
+              <text x={-a - 8} y={minY + 22} textAnchor="end" fontSize="12.5" fontWeight="600" fill="var(--muted)" fontFamily="var(--f-ui)">{centuryLabel(c)}</text>
             </g>
           ))}
-          {o.dec && links.map(l => pos.has(l.from) && pos.has(l.to) && (
-            <path key={l.id} d={curve(pos.get(l.from)!, pos.get(l.to)!, 16)} fill="none" stroke="var(--gold)" strokeWidth="1.6" strokeDasharray="5 4" markerEnd="url(#arG)">
-              <title>{`${title(l.from)} ← ${title(l.to)}${l.note ? ': ' + l.note : ''}`}</title>
-            </path>
-          ))}
-          {o.inf && analysis.edges.map(e => {
-            const isP = analysis.parent.get(e.to) === e
-            return (
-              <path key={e.from + e.to} d={curve(pos.get(e.from)!, pos.get(e.to)!, 0)} fill="none" stroke="var(--accent)"
-                strokeOpacity={isP ? 0.95 : 0.4} strokeWidth={(isP ? 1.6 : 1) + Math.min(e.weight, 2) * 1.4} markerEnd="url(#arA)">
-                <title>{`${title(e.from)} ← ${title(e.to)}: ${e.items.map(i => pct(i.sim)).join('، ')}`}</title>
-              </path>
-            )
+          {edges.map(e => {
+            const a = pos.get(e.from)!, b = pos.get(e.to)!
+            const { d } = edgePath(e.key, a, b, e.declared ? 16 : 0)
+            const isP = !e.declared && analysis.parent.get(e.to)?.from === e.from
+            return e.declared
+              ? <path key={e.key} d={d} fill="none" stroke="var(--gold)" strokeWidth="1.6" strokeDasharray="5 4" markerEnd="url(#arG)"><title>{e.tip}</title></path>
+              : <path key={e.key} d={d} fill="none" stroke="var(--accent)" strokeOpacity={isP ? 0.95 : 0.4} strokeWidth={(isP ? 1.6 : 1) + Math.min(e.weight, 2) * 1.4} markerEnd="url(#arA)"><title>{e.tip}</title></path>
           })}
           {books.map(b => {
             const p = pos.get(b.id)!
             const has = withTexts.has(b.id)
             const w = b.title.length * 9 + 30
             return (
-              <g key={b.id} className={'node draggable' + (sel === b.id ? ' sel' : '') + (dragging?.id === b.id ? ' grabbing' : '')} tabIndex={0} role="button" aria-label={b.title}
-                onPointerDown={e => onDown(e, b.id)} onPointerUp={() => onUp(b.id)} onPointerCancel={() => setDragging(null)}
-                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSel(b.id)}>
+              <g key={b.id} className={'node draggable' + (sel === b.id ? ' sel' : '') + (drag?.kind === 'node' && drag.id === b.id ? ' grabbing' : '')} tabIndex={0} role="button" aria-label={b.title}
+                onPointerDown={e => startNode(e, b.id)} onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSel(b.id)}>
                 {V ? <rect x={p.x - w + 14} y={p.y - 16} width={w} height={40} fill="transparent" />
                   : <rect x={p.x - w / 2} y={p.y - 14} width={w} height={62} fill="transparent" />}
                 <circle cx={p.x} cy={p.y} r="9" fill={has ? colorOf(b.school) : 'var(--surface)'} style={has ? undefined : { stroke: colorOf(b.school), strokeDasharray: '3 2' }} />
@@ -295,6 +389,14 @@ export function Tree() {
                   </>
                 )}
               </g>
+            )
+          })}
+          {bending && edges.map(e => {
+            const a = pos.get(e.from)!, b = pos.get(e.to)!
+            const { handle } = edgePath(e.key, a, b, e.declared ? 16 : 0)
+            return (
+              <circle key={'h' + e.key} className="bend-handle" cx={handle.x} cy={handle.y} r="7" fill="var(--surface)" stroke={e.declared ? 'var(--gold)' : 'var(--accent)'} strokeWidth="2"
+                onPointerDown={ev => startBend(ev, e.key, a, b)} onDoubleClick={() => straighten(e.key)}><title>{e.tip}</title></circle>
             )
           })}
         </svg>
