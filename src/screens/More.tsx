@@ -84,13 +84,20 @@ function OwnerLogin() {
     setBusy(false)
   }
 
-  if (!open) return <button className="btn sm ghost" onClick={() => setOpen(true)}>دخول المؤلف</button>
+  if (!open)
+    return (
+      <div className="card">
+        <strong>دخول المؤلف</strong>
+        <span className="small muted">الإضافة والتعديل والنشر لصاحب المنصة فقط. ادخل بمفتاح الوصول لتظهر لك أدوات التحكم.</span>
+        <div><button className="btn primary" onClick={() => setOpen(true)}>دخول المؤلف</button></div>
+      </div>
+    )
   return (
     <form className="card" onSubmit={submit} noValidate>
       <strong>دخول المؤلف</strong>
       <span className="small muted">
         الإضافة والنشر لصاحب المنصة وحده. أنشئ مرة واحدة مفتاح وصول من حسابك في GitHub: الإعدادات، ثم Developer settings، ثم Fine-grained tokens.
-        اختر المستودع <b dir="ltr">{DATA_REPO.repo}</b> وحده، وامنحه صلاحية Contents للقراءة والكتابة، ثم الصق المفتاح هنا. يُحفظ على هذا الجهاز فقط.
+        اختر المستودع <b dir="ltr">{DATA_REPO.repo}</b> وحده (<a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">صفحة إنشاء المفتاح</a>)، وامنحه صلاحية Contents للقراءة والكتابة، ثم الصق المفتاح هنا. يُحفظ على هذا الجهاز فقط.
       </span>
       <input id="owner-token" className="input" dir="ltr" type="password" autoComplete="off" value={token} onChange={e => { setToken(e.target.value); setError('') }} placeholder="github_pat_…" aria-label="مفتاح الوصول" />
       {error && <p className="warn" role="alert" style={{ margin: 0 }}>{error}</p>}
@@ -143,6 +150,7 @@ export default function More() {
   return (
     <>
       <PageHead title="المزيد" />
+      {!canEdit && <OwnerLogin />}
 
       {canEdit ? (
         <div className="stack tight">
@@ -222,7 +230,6 @@ export default function More() {
       <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <span className="small muted" style={{ flex: '1 1 auto' }}>أطوار · {ar(passages.length)} نصاً في هذا العلم · <Link to="/compare">مقارنة نصين</Link></span>
       </div>
-      {!canEdit && <OwnerLogin />}
       {toast}
     </>
   )
