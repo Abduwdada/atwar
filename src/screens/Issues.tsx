@@ -246,11 +246,12 @@ export function IssuePage() {
 }
 
 function ComparePanel({ list, aId, bId, onChange }: { list: PassageAnalysis[]; aId?: string; bId?: string; onChange: (p: [string, string]) => void }) {
+  const { thresholds } = useStore()
   if (list.length < 2 || !aId || !bId) return null
   let a = list.find(x => x.passage.id === aId)!, b = list.find(x => x.passage.id === bId)!
   if (!a || !b) return null
   if (a.book.death > b.book.death) [a, b] = [b, a]
-  const r = a === b ? null : compare(a.tokens, b.tokens)
+  const r = a === b ? null : compare(a.tokens, b.tokens, thresholds)
   const opt = list.map(x => <option key={x.passage.id} value={x.passage.id}>{x.book.title} ({yr(x.book)})</option>)
   return (
     <aside className="compare-panel" aria-label="مقارنة نصين">

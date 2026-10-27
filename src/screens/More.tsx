@@ -1,10 +1,14 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent } from 'react'
+import ListEditor from '../ui/ListEditor'
+import { toNum } from '../ui/forms'
+import { analyseScience } from '../engine/analyse'
+import { DEFAULT_TH, RELATIONS, type Relation, type Thresholds } from '../engine/compare'
 import { useNavigate } from 'react-router-dom'
 import { db, exportAll, importAll, removeSample } from '../data/db'
 import { usePrefs } from '../data/prefs'
 import { AuthError, ConflictError, DATA_REPO, HISTORY_URL } from '../data/remote'
 import { useStore } from '../data/store'
-import { ConfirmButton, PageHead, ar, count, useToast } from '../ui/bits'
+import { Badge, ConfirmButton, PageHead, ar, count, useToast } from '../ui/bits'
 import * as Icon from '../ui/icons'
 
 const when = (t: number) => new Date(t).toLocaleString('ar-SA-u-ca-gregory', { dateStyle: 'medium', timeStyle: 'short' })
@@ -262,6 +266,15 @@ export function ScienceSettings() {
         <div><button className="btn primary" type="submit">حفظ</button></div>
       </form>
 
+      <div className="section-label">القوائم</div>
+      <span className="small muted" style={{ marginTop: -8 }}>ما تختار منه عند إضافة كتاب أو مسألة. تعديل اسم عنصر يسري على كل ما يحمله، وحذفه يزيله منها.</span>
+      <ListEditor k="schools" />
+      <ListEditor k="kinds" />
+      <ListEditor k="sections" />
+
+      <div className="section-label">حدود التصنيف</div>
+      <ThresholdsEditor />
+
       {hasSample && (
         <div className="card">
           <strong>العينة التجريبية</strong>
@@ -277,5 +290,68 @@ export function ScienceSettings() {
       </div>
       {toast}
     </section>
+  )
+}
+
+const TH_ROWS: [keyof Thresholds, string, string][] = [
+  ['verbatim', 'نقل بالنص', 'إذا بلغ التشابه هذه النسبة فأكثر'],
+  ['cover', 'زيادة قيد أو اختصار', 'إذا حوى أحد النصين هذه النسبة من ألفاظ الآخر وزاد عليه أو نقص عنه'],
+  ['substitute', 'نقل مع إبدال يسير', 'من هذه النسبة'],
+  ['adapt', 'نقل مع تصرف', 'من هذه النسبة'],
+  ['influence', 'تأثر في الصياغة', 'من هذه النسبة، وما دونها صياغة مستقلة'],
+]
+const toPct = (t: Thresholds) => Object.fromEntries(Object.entries(t).map(([k, v]) => [k, String(Math.round(v * 100))])) as Record<keyof Thresholds, string>
+
+function ThresholdsEditor() {
+  const { science, thresholds, passages, books } = useStore()
+  const [d, setD] = useState(() => toPct(thresholds))
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+  const th = Object.fromEntries(Object.entries(d).map(([k, v]) => [k, toNum(v) / 100])) as unknown as Thresholds
+  const valid = Object.values(th).every(v => v > 0 && v <= 1)
+  // معاينة: كم نصاً يقع في كل تصنيف بهذه الحدود
+  const dist = useMemo(() => {
+    if (!valid) return null
+    const m = new Map<Relation, number>()
+    analyseScience(passages, books, th).passages.forEach(a => m.set(a.relation, (m.get(a.relation) ?? 0) + 1))
+    return m
+  }, [d, passages, books]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function save() {
+    if (!valid) return setError('كل نسبة بين ١ و١٠٠.')
+    if (!(th.verbatim >= th.substitute && th.substitute >= th.adapt && th.adapt >= th.influence))
+      return setError('رتّب النسب تنازلياً: النقل بالنص، ثم الإبدال، ثم التصرف، ثم التأثر.')
+    await db.sciences.update(science!.id, { thresholds: th })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+  async function reset() {
+    setD(toPct(DEFAULT_TH))
+    await db.sciences.update(science!.id, { thresholds: undefined })
+  }
+
+  return (
+    <div className="card">
+      <span className="small muted">تحدد متى يُعدّ النص نقلاً أو تصرفاً أو تأثراً. اضبطها على ما تراه في علمك، والتصنيفات كلها تتحدث فوراً.</span>
+      <div className="th-grid">
+        {TH_ROWS.map(([k, label, hint]) => (
+          <label key={k} className="th-row" htmlFor={`th-${k}`}>
+            <span><b>{label}</b><small className="muted">{hint}</small></span>
+            <span className="th-input"><input id={`th-${k}`} className="input num" inputMode="numeric" value={ar(d[k])} onChange={e => { setD({ ...d, [k]: String(toNum(e.target.value) || '') }); setError('') }} />٪</span>
+          </label>
+        ))}
+      </div>
+      {dist && (
+        <div className="th-dist">
+          <span className="small muted">بهذه الحدود:</span>
+          {(Object.keys(RELATIONS) as Relation[]).filter(r => dist.get(r)).map(r => <span key={r} className="small"><Badge relation={r} /> {ar(dist.get(r)!)}</span>)}
+        </div>
+      )}
+      {error && <p className="warn" role="alert" style={{ margin: 0 }}>{error}</p>}
+      <div className="row">
+        <button className="btn primary" onClick={save}>{saved ? 'حُفظت' : 'حفظ الحدود'}</button>
+        <button className="btn ghost" onClick={reset}>الحدود الافتراضية</button>
+      </div>
+    </div>
   )
 }

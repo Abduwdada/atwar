@@ -1,9 +1,17 @@
+import type { Thresholds } from '../engine/compare'
+
+export type ListKey = 'schools' | 'kinds' | 'sections'
+
 export interface Science {
   id: string
   name: string
   description?: string
-  // مواضع الكتب في الشجرة كما رتبها المؤلف بالسحب
-  treeLayout?: Record<string, { x: number; y: number }>
+  // مواضع الكتب في الشجرة كما رتبها المؤلف بالسحب، لكل طريقة عرض على حدة
+  treeLayout?: Record<string, { x: number; y: number }> // العمودي (الصيغة الأولى)
+  treeLayoutH?: Record<string, { x: number; y: number }> // الأفقي
+  // القوائم التي يختار منها المؤلف عند الإضافة، ويعدّلها من إعدادات العلم
+  lists?: Partial<Record<ListKey, string[]>>
+  thresholds?: Partial<Thresholds>
   createdAt: number
 }
 

@@ -1,6 +1,6 @@
 import type { Book, Passage } from '../data/types'
 import { tokenize, stripPunct, type Token } from './arabic'
-import { align, compare, EDGE_MIN, type Comparison, type Relation } from './compare'
+import { align, compare, DEFAULT_TH, type Comparison, type Relation, type Thresholds } from './compare'
 
 export interface Candidate {
   passage: Passage
@@ -50,7 +50,7 @@ function secondary(tokens: Token[], source: Candidate, candidates: Candidate[]) 
   return best && { book: best.book, words: best.words }
 }
 
-export function analyseScience(passages: Passage[], books: Book[]): ScienceAnalysis {
+export function analyseScience(passages: Passage[], books: Book[], th: Thresholds = DEFAULT_TH): ScienceAnalysis {
   const bookById = new Map(books.map(b => [b.id, b]))
   const valid = passages.filter(p => bookById.has(p.bookId))
   const tokensOf = new Map(valid.map(p => [p.id, tokenize(p.body)]))
@@ -63,9 +63,9 @@ export function analyseScience(passages: Passage[], books: Book[]): ScienceAnaly
     const tokens = tokensOf.get(p.id)!
     const earlier = (byIssue.get(p.issueId) ?? []).filter(s => bookById.get(s.bookId)!.death < book.death)
     const candidates = earlier
-      .map(s => ({ passage: s, book: bookById.get(s.bookId)!, cmp: compare(tokensOf.get(s.id)!, tokens) }))
+      .map(s => ({ passage: s, book: bookById.get(s.bookId)!, cmp: compare(tokensOf.get(s.id)!, tokens, th) }))
       .sort((a, b) => b.cmp.sim - a.cmp.sim)
-    const suggested = candidates[0] && candidates[0].cmp.sim >= EDGE_MIN ? candidates[0] : null
+    const suggested = candidates[0] && candidates[0].cmp.sim >= th.influence ? candidates[0] : null
 
     let source = suggested
     let manual = false
@@ -104,7 +104,7 @@ export function analyseScience(passages: Passage[], books: Book[]): ScienceAnaly
     const key = a.source.book.id + '>' + a.book.id
     const e = edgeMap.get(key) ?? { from: a.source.book.id, to: a.book.id, weight: 0, items: [] }
     // اختيار الباحث يُعتد به ولو قلّ التشابه اللفظي
-    e.weight += a.manual ? Math.max(a.source.cmp.sim, EDGE_MIN) : a.source.cmp.sim
+    e.weight += a.manual ? Math.max(a.source.cmp.sim, th.influence) : a.source.cmp.sim
     e.items.push({ issueId: a.passage.issueId, sim: a.source.cmp.sim, relation: a.source.cmp.relation, manual: a.manual })
     edgeMap.set(key, e)
   }

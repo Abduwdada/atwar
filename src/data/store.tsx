@@ -8,6 +8,8 @@ import {
 } from './remote'
 import type { Book, Issue, Link, Passage, Science } from './types'
 import { analyseScience, type ScienceAnalysis } from '../engine/analyse'
+import { DEFAULT_TH, type Thresholds } from '../engine/compare'
+import { BOOK_KINDS, type ListKey } from './types'
 
 interface Store {
   ready: boolean
@@ -25,6 +27,8 @@ interface Store {
   issueById: Map<string, Issue>
   analysis: ScienceAnalysis
   hasSample: boolean
+  thresholds: Thresholds
+  lists: Record<ListKey, string[]>
   // ملخص كل علم للصفحة الرئيسية العامة
   scienceStats: Map<string, ScienceStats>
   // النشر
@@ -144,6 +148,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const issues = sortIssues(owner ? lIssues ?? [] : pick(remote?.issues))
     const passages = owner ? lPassages ?? [] : pick(remote?.passages)
     const links = owner ? lLinks ?? [] : pick(remote?.links)
+    const sci = sciences?.find(s => s.id === scienceId)
+    const thresholds = { ...DEFAULT_TH, ...sci?.thresholds }
+    // القائمة كما رتبها المؤلف، مع أي قيمة مستعملة لم تدخلها بعد
+    const merge = (saved: string[] | undefined, used: (string | undefined)[], base: readonly string[] = []) =>
+      [...new Set([...(saved ?? base), ...used.filter((x): x is string => !!x)])]
+    const lists: Record<ListKey, string[]> = {
+      schools: merge(sci?.lists?.schools, books.map(b => b.school)),
+      kinds: merge(sci?.lists?.kinds, books.map(b => b.kind), BOOK_KINDS),
+      sections: merge(sci?.lists?.sections, issues.map(i => i.section)),
+    }
     const ready = owner ? !!(lSciences && lBooks && lIssues && lPassages && lLinks) : !!remote
     return {
       ready, loadError, canEdit: owner,
@@ -153,7 +167,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       books, issues, passages, links,
       bookById: new Map(books.map(x => [x.id, x])),
       issueById: new Map(issues.map(x => [x.id, x])),
-      analysis: analyseScience(passages, books),
+      analysis: analyseScience(passages, books, thresholds),
+      thresholds,
+      lists,
       hasSample: passages.some(x => x.sample) || books.some(x => x.sample),
       scienceStats: statsOf(owner ? allLocal : remote ?? undefined),
       sync,

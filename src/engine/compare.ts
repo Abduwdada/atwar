@@ -58,8 +58,16 @@ export const RELATIONS: Record<Relation, { label: string; strength: 0 | 1 | 2 | 
   first: { label: 'أقدم نص', strength: -1 },
 }
 
-// أدنى تشابه يُعدّ معه النص المتقدم مصدراً محتملاً
-export const EDGE_MIN = 0.3
+// حدود التصنيف، ويضبطها المؤلف لكل علم
+export interface Thresholds {
+  verbatim: number // نقل بالنص
+  cover: number // نسبة الاحتواء في زيادة القيد والاختصار
+  substitute: number // إبدال يسير
+  adapt: number // نقل مع تصرف
+  influence: number // تأثر، وهو أدنى تشابه يُعدّ معه النص المتقدم مصدراً محتملاً
+}
+export const DEFAULT_TH: Thresholds = { verbatim: 0.95, cover: 0.8, substitute: 0.8, adapt: 0.6, influence: 0.3 }
+export const EDGE_MIN = DEFAULT_TH.influence
 
 export interface Comparison {
   L: number
@@ -70,20 +78,20 @@ export interface Comparison {
   relation: Relation
 }
 
-export function classify(sim: number, covS: number, covT: number, ls: number, lt: number): Relation {
-  if (sim >= 0.95) return 'verbatim'
-  if (covS >= 0.8 && lt > ls) return 'expand'
-  if (covT >= 0.8 && lt < ls) return 'abridge'
-  if (sim >= 0.8) return 'substitute'
-  if (sim >= 0.6) return 'adapt'
-  if (sim >= EDGE_MIN) return 'influence'
+export function classify(sim: number, covS: number, covT: number, ls: number, lt: number, th: Thresholds = DEFAULT_TH): Relation {
+  if (sim >= th.verbatim) return 'verbatim'
+  if (covS >= th.cover && lt > ls) return 'expand'
+  if (covT >= th.cover && lt < ls) return 'abridge'
+  if (sim >= th.substitute) return 'substitute'
+  if (sim >= th.adapt) return 'adapt'
+  if (sim >= th.influence) return 'influence'
   return 'independent'
 }
 
-export function compare(src: Token[], tgt: Token[]): Comparison {
+export function compare(src: Token[], tgt: Token[], th: Thresholds = DEFAULT_TH): Comparison {
   const { L, ops } = align(src, tgt)
   const sim = (2 * L) / (src.length + tgt.length || 1)
   const covS = L / (src.length || 1)
   const covT = L / (tgt.length || 1)
-  return { L, ops, sim, covS, covT, relation: classify(sim, covS, covT, src.length, tgt.length) }
+  return { L, ops, sim, covS, covT, relation: classify(sim, covS, covT, src.length, tgt.length, th) }
 }
