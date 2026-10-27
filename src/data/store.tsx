@@ -51,7 +51,8 @@ function readSaved() {
 }
 
 const sortBooks = (b: Book[]) => [...b].sort((x, y) => x.death - y.death)
-const sortIssues = (i: Issue[]) => [...i].sort((x, y) => x.createdAt - y.createdAt)
+export const issueKey = (i: Issue) => i.order ?? i.createdAt
+const sortIssues = (i: Issue[]) => [...i].sort((x, y) => issueKey(x) - issueKey(y))
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [scienceId, setScienceIdState] = useState(readSaved)
@@ -140,7 +141,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Store>(() => {
     const pick = <T extends { scienceId: string }>(xs: T[] | undefined) => (xs ?? []).filter(x => x.scienceId === scienceId)
     const books = owner ? lBooks ?? [] : sortBooks(pick(remote?.books))
-    const issues = owner ? lIssues ?? [] : sortIssues(pick(remote?.issues))
+    const issues = sortIssues(owner ? lIssues ?? [] : pick(remote?.issues))
     const passages = owner ? lPassages ?? [] : pick(remote?.passages)
     const links = owner ? lLinks ?? [] : pick(remote?.links)
     const ready = owner ? !!(lSciences && lBooks && lIssues && lPassages && lLinks) : !!remote

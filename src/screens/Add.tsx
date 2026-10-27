@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { sp } from '../nav'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { db, newId } from '../data/db'
 import { useStore } from '../data/store'
@@ -210,9 +211,9 @@ function Result({ id, analysis }: { id: string; analysis: ReturnType<typeof useS
         {a.second && <p className="small muted" style={{ margin: 0 }}>ويظهر فيه أثر <b>{a.second.book.title}</b> في: {a.second.words.join('، ')}</p>}
       </div>
       <div className="stack tight">
-        <Link className="btn primary block" to={`/add?book=${p.bookId}`}>نص آخر من الكتاب نفسه</Link>
-        <Link className="btn block" to={`/add?issue=${p.issueId}`}>نص آخر في المسألة نفسها</Link>
-        <Link className="btn ghost block" to={`/issues/${p.issueId}#${p.id}`}>عرض تطور المسألة</Link>
+        <Link className="btn primary block" to={sp(`/add?book=${p.bookId}`)}>نص آخر من الكتاب نفسه</Link>
+        <Link className="btn block" to={sp(`/add?issue=${p.issueId}`)}>نص آخر في المسألة نفسها</Link>
+        <Link className="btn ghost block" to={sp(`/issues/${p.issueId}#${p.id}`)}>عرض تطور المسألة</Link>
       </div>
     </div>
   )

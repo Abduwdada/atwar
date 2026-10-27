@@ -1,55 +1,57 @@
-import { HashRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { HashRouter, Navigate, NavLink, Route, Routes, useLocation, useParams } from 'react-router-dom'
+import { useEffect, type ReactElement } from 'react'
 import { StoreProvider, useStore } from './data/store'
+import { PrefsProvider } from './data/prefs'
 import * as Icon from './ui/icons'
+import Landing from './screens/Landing'
+import ScienceShell from './screens/ScienceShell'
 import Home from './screens/Home'
 import Add from './screens/Add'
 import { IssueList, IssuePage } from './screens/Issues'
 import { BookList, BookPage } from './screens/Books'
 import PassageEdit from './screens/PassageEdit'
 import { Compare, Matrix, Tree } from './screens/Views'
-import More from './screens/More'
+import Settings, { ScienceSettings } from './screens/More'
 import Search from './screens/Search'
-import Landing from './screens/Landing'
 
-// صفحات النماذج تبقى بعرض القراءة، وصفحات الاستعراض تتسع على الشاشة الكبيرة
-const NARROW = ['/add', '/more', '/passages']
+// الروابط القديمة قبل أن يصير لكل علم صفحته: تُحوَّل إلى العلم المفتوح آخر مرة
+function Legacy({ to }: { to: string }) {
+  const { science, sciences } = useStore()
+  const params = useParams()
+  const { search, hash } = useLocation()
+  const sid = science?.id ?? sciences[0]?.id
+  if (!sid) return <Navigate to="/" replace />
+  const path = to.replace(':id', params.id ?? '')
+  return <Navigate to={`/s/${sid}${path}${search}${hash}`} replace />
+}
 
-function SideSearch() {
-  const [q, setQ] = useState('')
-  const nav = useNavigate()
-  return (
-    <form className="search side-search" onSubmit={e => { e.preventDefault(); nav(`/search?q=${encodeURIComponent(q.trim())}`); setQ('') }}>
-      <Icon.Search />
-      <input id="side-q" className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="بحث" aria-label="بحث" />
-    </form>
-  )
+function SubKeyed({ el }: { el: (key: string) => ReactElement }) {
+  const { search, key } = useLocation()
+  return el(search + key)
 }
 
 function Shell() {
-  const { pathname, search, key, hash } = useLocation()
-  const { ready, loadError, canEdit, dirty, science } = useStore()
+  const { pathname, hash } = useLocation()
+  const { ready, loadError, canEdit, dirty, science, sciences } = useStore()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (!hash) window.scrollTo(0, 0) }, [pathname])
-  useEffect(() => { document.title = science && pathname !== '/' ? `أطوار · ${science.name}` : 'أطوار' }, [science, pathname])
-  const narrow = NARROW.some(p => pathname.startsWith(p))
+  const inScience = pathname.startsWith('/s/')
+  useEffect(() => { document.title = science && inScience ? `أطوار · ${science.name}` : 'أطوار' }, [science, inScience])
+  const narrow = ['/settings', '/add', '/passages'].some(p => pathname === p || pathname.includes(p + '/') || pathname.endsWith(p))
+  const sid = science?.id ?? sciences[0]?.id
 
   return (
     <div className="shell">
       <nav className="sidebar" aria-label="الأقسام">
         <NavLink to="/" end className="brand">أطوار<small>رصد تطور العلوم عبر نصوصها</small></NavLink>
-        <SideSearch />
-        {canEdit && <NavLink className="btn primary" to="/add"><Icon.Plus />إضافة نص</NavLink>}
         <NavLink to="/" end><Icon.Home />العلوم</NavLink>
-        <div className="side-group">{science?.name}</div>
-        <NavLink to="/science"><Icon.Overview />نظرة عامة</NavLink>
-        <NavLink to="/issues"><Icon.Issues />المسائل</NavLink>
-        <NavLink to="/books"><Icon.Books />الكتب</NavLink>
-        <NavLink to="/matrix"><Icon.Grid />المصفوفة</NavLink>
-        <NavLink to="/tree"><Icon.Tree />شجرة الكتب</NavLink>
-        <NavLink to="/compare"><Icon.Compare />مقارنة نصين</NavLink>
-        <NavLink to="/more"><Icon.More />المزيد{canEdit && dirty && <span className="dot" title="تعديلات لم تُنشر" />}</NavLink>
-        <div className="side-foot small muted">{canEdit ? (dirty ? 'عندك تعديلات لم تُنشر' : 'وضع المؤلف') : 'نتائج منشورة للباحثين'}</div>
+        <div className="side-group">العلوم المرصودة</div>
+        {sciences.map(s => <NavLink key={s.id} to={`/s/${s.id}`} className="side-sci">{s.name}</NavLink>)}
+        <div className="side-spacer" />
+        <NavLink to="/settings"><Icon.Settings />الإعدادات{canEdit && dirty && <span className="dot" title="تعديلات لم تُنشر" />}</NavLink>
+        <div className="side-foot small muted">
+          {canEdit ? (dirty ? <NavLink to="/settings" className="pending">تعديلات لم تُنشر · انشرها</NavLink> : 'وضع المؤلف · كل شيء منشور') : 'نتائج منشورة للباحثين'}
+        </div>
       </nav>
 
       <main className={'main' + (narrow ? '' : ' wide')}>
@@ -58,19 +60,33 @@ function Shell() {
         ) : ready ? (
           <Routes>
             <Route path="/" element={<Landing />} />
-            <Route path="/science" element={<Home />} />
-            {/* مفتاح البحث يعيد بناء شاشة الإضافة عند الانتقال من نص إلى آخر */}
-            <Route path="/add" element={canEdit ? <Add key={search + key} /> : <Navigate to="/more" replace />} />
-            <Route path="/issues" element={<IssueList />} />
-            <Route path="/issues/:id" element={<IssuePage />} />
-            <Route path="/books" element={<BookList />} />
-            <Route path="/books/:id" element={<BookPage />} />
-            <Route path="/passages/:id/edit" element={canEdit ? <PassageEdit /> : <Navigate to="/" replace />} />
-            <Route path="/matrix" element={<Matrix />} />
-            <Route path="/tree" element={<Tree />} />
-            <Route path="/compare" element={<Compare />} />
-            <Route path="/search" element={<Search key={search} />} />
-            <Route path="/more" element={<More />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/s/:sid" element={<ScienceShell />}>
+              <Route index element={<Home />} />
+              <Route path="books" element={<BookList />} />
+              <Route path="books/:id" element={<BookPage />} />
+              <Route path="issues" element={<IssueList />} />
+              <Route path="issues/:id" element={<IssuePage />} />
+              <Route path="matrix" element={<Matrix />} />
+              <Route path="tree" element={<Tree />} />
+              <Route path="compare" element={<Compare />} />
+              <Route path="search" element={<SubKeyed el={k => <Search key={k} />} />} />
+              <Route path="settings" element={canEdit ? <ScienceSettings /> : <Navigate to=".." replace />} />
+              {/* مفتاح البحث يعيد بناء شاشة الإضافة عند الانتقال من نص إلى آخر */}
+              <Route path="add" element={canEdit ? <SubKeyed el={k => <Add key={k} />} /> : <Navigate to="/settings" replace />} />
+              <Route path="passages/:id/edit" element={canEdit ? <PassageEdit /> : <Navigate to=".." replace />} />
+            </Route>
+            <Route path="/science" element={<Legacy to="" />} />
+            <Route path="/books" element={<Legacy to="/books" />} />
+            <Route path="/books/:id" element={<Legacy to="/books/:id" />} />
+            <Route path="/issues" element={<Legacy to="/issues" />} />
+            <Route path="/issues/:id" element={<Legacy to="/issues/:id" />} />
+            <Route path="/matrix" element={<Legacy to="/matrix" />} />
+            <Route path="/tree" element={<Legacy to="/tree" />} />
+            <Route path="/compare" element={<Legacy to="/compare" />} />
+            <Route path="/search" element={<Legacy to="/search" />} />
+            <Route path="/add" element={<Legacy to="/add" />} />
+            <Route path="/more" element={<Navigate to="/settings" replace />} />
             <Route path="*" element={<Landing />} />
           </Routes>
         ) : <div className="empty">جارٍ التحميل…</div>}
@@ -78,12 +94,11 @@ function Shell() {
 
       <nav className="tabbar" aria-label="الأقسام">
         <NavLink to="/" end><Icon.Home /><span>العلوم</span></NavLink>
-        <NavLink to="/issues"><Icon.Issues /><span>المسائل</span></NavLink>
-        {canEdit
-          ? <NavLink to="/add" className="add" aria-label="إضافة نص"><span className="plus"><Icon.Plus /></span></NavLink>
-          : <NavLink to="/search"><Icon.Search /><span>البحث</span></NavLink>}
-        <NavLink to="/books"><Icon.Books /><span>الكتب</span></NavLink>
-        <NavLink to="/more"><Icon.More /><span>المزيد</span>{canEdit && dirty && <span className="dot" />}</NavLink>
+        {sid && <NavLink to={`/s/${sid}`}><Icon.Overview /><span className="tab-sci">{science?.name ?? 'العلم'}</span></NavLink>}
+        {canEdit && sid
+          ? <NavLink to={`/s/${sid}/add`} className="add" aria-label="إضافة نص"><span className="plus"><Icon.Plus /></span></NavLink>
+          : sid && <NavLink to={`/s/${sid}/search`}><Icon.Search /><span>البحث</span></NavLink>}
+        <NavLink to="/settings"><Icon.Settings /><span>الإعدادات</span>{canEdit && dirty && <span className="dot" />}</NavLink>
       </nav>
     </div>
   )
@@ -92,9 +107,11 @@ function Shell() {
 export default function App() {
   return (
     <HashRouter>
-      <StoreProvider>
-        <Shell />
-      </StoreProvider>
+      <PrefsProvider>
+        <StoreProvider>
+          <Shell />
+        </StoreProvider>
+      </PrefsProvider>
     </HashRouter>
   )
 }

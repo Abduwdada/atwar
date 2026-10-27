@@ -1,9 +1,10 @@
 import { useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { db, exportAll, importAll, newId, removeSample } from '../data/db'
+import { useNavigate } from 'react-router-dom'
+import { db, exportAll, importAll, removeSample } from '../data/db'
+import { usePrefs } from '../data/prefs'
 import { AuthError, ConflictError, DATA_REPO, HISTORY_URL } from '../data/remote'
 import { useStore } from '../data/store'
-import { ConfirmButton, PageHead, ar, useToast } from '../ui/bits'
+import { ConfirmButton, PageHead, ar, count, useToast } from '../ui/bits'
 import * as Icon from '../ui/icons'
 
 const when = (t: number) => new Date(t).toLocaleString('ar-SA-u-ca-gregory', { dateStyle: 'medium', timeStyle: 'short' })
@@ -109,22 +110,11 @@ function OwnerLogin() {
   )
 }
 
-export default function More() {
-  const { sciences, science, setScienceId, hasSample, passages, canEdit, sync, dirty, pull, logout, localWorkHidden } = useStore()
+export default function Settings() {
+  const { canEdit, sync, dirty, pull, logout, localWorkHidden } = useStore()
+  const { prefs, setPref } = usePrefs()
   const [toast, say] = useToast()
-  const [name, setName] = useState('')
-  const [error, setError] = useState('')
   const file = useRef<HTMLInputElement>(null)
-
-  async function addScience(e: FormEvent) {
-    e.preventDefault()
-    if (!name.trim()) return setError('اكتب اسم العلم.')
-    const id = newId()
-    await db.sciences.add({ id, name: name.trim(), createdAt: Date.now() })
-    setScienceId(id)
-    setName('')
-    say(`أُضيف علم ${name.trim()}`)
-  }
 
   async function download() {
     const blob = new Blob([JSON.stringify(await exportAll(), null, 1)], { type: 'application/json' })
@@ -147,76 +137,75 @@ export default function More() {
     if (file.current) file.current.value = ''
   }
 
+  const Seg = <T extends string>({ id, value, options, onChange }: { id: string; value: T; options: [T, string][]; onChange: (v: T) => void }) => (
+    <div className="seg" role="radiogroup" id={id}>
+      {options.map(([v, label]) => <button key={v} role="radio" aria-checked={value === v} className={value === v ? 'on' : ''} onClick={() => onChange(v)}>{label}</button>)}
+    </div>
+  )
+
   return (
     <>
-      <PageHead title="المزيد" />
-      {!canEdit && <OwnerLogin />}
+      <PageHead title="الإعدادات" />
 
-      {canEdit ? (
-        <div className="stack tight">
-          <div className="section-label">النشر</div>
-          <PublishBar />
-          <div className="card">
-            <span className="small muted">
-              تعمل على نسخة في هذا الجهاز، ولا يرى الزوار شيئاً حتى تنشر.
-              {sync && ` آخر نشر أو جلب: ${when(sync.at)}.`} سجل كل ما نُشر محفوظ في <a href={HISTORY_URL} target="_blank" rel="noreferrer">مستودع البيانات</a>.
-            </span>
-            {!sync && <span className="small">على هذا الجهاز نصوص لم تُقارن بالمنشورة. انشرها لتصير هي النسخة العامة، أو اجلب المنشورة لتستبدلها.</span>}
-            <div className="row">
-              <ConfirmButton label="جلب النسخة المنشورة" confirm={dirty ? 'تُستبدل تعديلاتك غير المنشورة. متأكد؟' : 'جلب المنشورة إلى هذا الجهاز؟'}
-                onConfirm={async () => { try { await pull(); say('جُلبت النسخة المنشورة') } catch (e) { say(e instanceof Error ? e.message : 'تعذر الجلب') } }} />
-              <button className="btn sm ghost" onClick={logout}>خروج المؤلف</button>
-            </div>
+      <section className="stack tight">
+        <div className="section-label">العرض</div>
+        <div className="card settings">
+          <div className="setting"><span>المظهر</span>
+            <Seg id="set-theme" value={prefs.theme} onChange={v => setPref('theme', v)} options={[['system', 'تلقائي'], ['light', 'فاتح'], ['dark', 'داكن']]} />
           </div>
+          <div className="setting"><span>حجم خط النصوص</span>
+            <Seg id="set-size" value={prefs.textSize} onChange={v => setPref('textSize', v)} options={[['sm', 'صغير'], ['md', 'متوسط'], ['lg', 'كبير']]} />
+          </div>
+          <div className="setting"><span>ترتيب نصوص المسألة</span>
+            <Seg id="set-order" value={prefs.oldestFirst ? 'old' : 'new'} onChange={v => setPref('oldestFirst', v === 'old')} options={[['old', 'الأقدم أولاً'], ['new', 'الأحدث أولاً']]} />
+          </div>
+          <div className="setting"><span>إظهار ما حذفه المتأخر من عبارة مصدره</span>
+            <Seg id="set-del" value={prefs.showDel ? 'on' : 'off'} onChange={v => setPref('showDel', v === 'on')} options={[['on', 'إظهار'], ['off', 'إخفاء']]} />
+          </div>
+          <p className="text sample-text"><span className="lead">مثال: </span>ما يذم <ins>شرعاً</ins> تاركه {prefs.showDel && <del>ويلام</del>} قصداً</p>
         </div>
-      ) : localWorkHidden ? (
-        <div className="note"><span><strong>على هذا الجهاز نصوص كتبتها قبل تفعيل النشر. </strong>ادخل بصفتك المؤلف لتظهر وتنشرها.</span></div>
-      ) : null}
+      </section>
 
-      <div className="stack tight">
-        <div className="section-label">العلوم</div>
-        <div className="list">
-          {sciences.map(s => (
-            <button key={s.id} className={'item' + (s.id === science?.id ? ' selected' : '')} onClick={() => setScienceId(s.id)}>
-              <div className="grow"><div className="title">{s.name}</div></div>
-              {s.id === science?.id && <Icon.Check />}
-            </button>
-          ))}
-        </div>
-        {canEdit && (
-          <form className="row" onSubmit={addScience} noValidate>
-            <input id="more-science" className="input" value={name} onChange={e => { setName(e.target.value); setError('') }} placeholder="النحو" aria-label="اسم العلم الجديد" />
-            <button className="btn" type="submit" style={{ flex: '0 0 auto' }}><Icon.Plus />علم جديد</button>
-          </form>
+      <section className="stack tight">
+        <div className="section-label">{canEdit ? 'النشر' : 'المؤلف'}</div>
+        {canEdit ? (
+          <>
+            <PublishBar />
+            <div className="card">
+              <span className="small muted">
+                تعمل على نسخة في هذا الجهاز، ولا يرى الزوار شيئاً حتى تنشر.
+                {sync && ` آخر نشر أو جلب: ${when(sync.at)}.`} سجل كل ما نُشر محفوظ في <a href={HISTORY_URL} target="_blank" rel="noreferrer">مستودع البيانات</a>.
+              </span>
+              <div className="row">
+                <ConfirmButton label="جلب النسخة المنشورة" confirm={dirty ? 'تُستبدل تعديلاتك غير المنشورة. متأكد؟' : 'جلب المنشورة إلى هذا الجهاز؟'}
+                  onConfirm={async () => { try { await pull(); say('جُلبت النسخة المنشورة') } catch (e) { say(e instanceof Error ? e.message : 'تعذر الجلب') } }} />
+                <button className="btn sm ghost" onClick={logout}>خروج المؤلف</button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {localWorkHidden && <div className="note"><span><strong>على هذا الجهاز نصوص كتبتها قبل تفعيل النشر. </strong>ادخل بصفتك المؤلف لتظهر وتنشرها.</span></div>}
+            <OwnerLogin />
+          </>
         )}
-        {error && <p className="warn" role="alert" style={{ margin: 0 }}>{error}</p>}
-      </div>
+      </section>
 
       {canEdit && (
-        <div className="stack tight">
+        <section className="stack tight">
           <div className="section-label">نسخة احتياطية</div>
           <div className="card">
-            <span className="small muted">ملف بكل ما على هذا الجهاز، منشوراً كان أو لا.</span>
+            <span className="small muted">ملف بكل ما على هذا الجهاز من العلوم والكتب والنصوص، منشوراً كان أو لا.</span>
             <div className="row">
               <button className="btn" onClick={download}><Icon.Download />حفظ نسخة احتياطية</button>
               <button className="btn" onClick={() => file.current?.click()}><Icon.Upload />استرجاع نسخة</button>
               <input ref={file} id="more-file" type="file" accept="application/json,.json" hidden onChange={e => upload(e.target.files?.[0])} />
             </div>
           </div>
-        </div>
+        </section>
       )}
 
-      {canEdit && hasSample && (
-        <div className="stack tight">
-          <div className="section-label">العينة التجريبية</div>
-          <div className="card">
-            <span className="small muted">نصوص مكتوبة من الذاكرة لتجربة المنصة. حذفها لا يمس نصوصك، ثم انشر ليختفي من النسخة العامة.</span>
-            <ConfirmButton label="حذف العينة" confirm="حذف نصوص العينة؟" onConfirm={async () => { await removeSample(science!.id); say('حُذفت العينة') }} />
-          </div>
-        </div>
-      )}
-
-      <div className="stack tight">
+      <section className="stack tight">
         <div className="section-label">كيف تقرأ المنصة النصوص</div>
         <div className="card small">
           <p style={{ margin: 0 }}><b>توحيد الرسم:</b> تُحذف الحركات، وتوحَّد الهمزات والتاء المربوطة، وتجرَّد السوابق واللواحق عند المقارنة فقط.</p>
@@ -225,12 +214,68 @@ export default function More() {
           <p style={{ margin: 0 }}><b>النسب:</b> أصل الكتاب هو الكتاب الذي تراكم منه أعلى تشابه عبر المسائل، وما يحدده المؤلف من مصادر يقدَّم على اقتراح النظام.</p>
           <p style={{ margin: 0 }} className="muted">التشابه اللفظي قرينة لا دليل؛ قد يرجع نصان إلى أصل مشترك، وقد يتأثر كتاب بآخر في المعنى دون اللفظ.</p>
         </div>
-      </div>
-
-      <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
-        <span className="small muted" style={{ flex: '1 1 auto' }}>أطوار · {ar(passages.length)} نصاً في هذا العلم · <Link to="/compare">مقارنة نصين</Link></span>
-      </div>
+      </section>
       {toast}
     </>
+  )
+}
+
+// إعدادات العلم: اسمه ووصفه، وحذف العينة، وحذفه كله
+export function ScienceSettings() {
+  const { science, hasSample, books, passages } = useStore()
+  const nav = useNavigate()
+  const [toast, say] = useToast()
+  const [name, setName] = useState(science?.name ?? '')
+  const [desc, setDesc] = useState(science?.description ?? '')
+  const [error, setError] = useState('')
+  if (!science) return null
+
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return setError('اكتب اسم العلم.')
+    await db.sciences.update(science!.id, { name: name.trim(), description: desc.trim() || undefined })
+    say('حُفظت إعدادات العلم')
+  }
+
+  async function removeScience() {
+    const sid = science!.id
+    await db.transaction('rw', [db.sciences, db.books, db.issues, db.passages, db.links], async () => {
+      await db.passages.where({ scienceId: sid }).delete()
+      await db.links.where({ scienceId: sid }).delete()
+      await db.issues.where({ scienceId: sid }).delete()
+      await db.books.where({ scienceId: sid }).delete()
+      await db.sciences.delete(sid)
+    })
+    nav('/')
+  }
+
+  return (
+    <section className="stack narrow">
+      <form className="card" onSubmit={save} noValidate>
+        <label className="field"><span>اسم العلم</span>
+          <input id="sci-name" className="input" value={name} onChange={e => { setName(e.target.value); setError('') }} />
+        </label>
+        <label className="field"><span>وصف قصير يظهر في رأس صفحة العلم</span>
+          <textarea id="sci-desc" className="input" style={{ minHeight: 90 }} value={desc} onChange={e => setDesc(e.target.value)} placeholder="مثل: تتبّع تعريفات أصول الفقه من المعتمد إلى إرشاد الفحول" />
+        </label>
+        {error && <p className="warn" role="alert" style={{ margin: 0 }}>{error}</p>}
+        <div><button className="btn primary" type="submit">حفظ</button></div>
+      </form>
+
+      {hasSample && (
+        <div className="card">
+          <strong>العينة التجريبية</strong>
+          <span className="small muted">نصوص مكتوبة من الذاكرة لتجربة المنصة. حذفها لا يمس نصوصك، ثم انشر ليختفي من النسخة العامة.</span>
+          <ConfirmButton label="حذف العينة" confirm="حذف نصوص العينة؟" onConfirm={async () => { await removeSample(science.id); say('حُذفت العينة') }} />
+        </div>
+      )}
+
+      <div className="card danger-zone">
+        <strong>حذف العلم</strong>
+        <span className="small muted">يُحذف العلم ومعه {count(books.length, 'كتاب', 'كتابان', 'كتب', 'كتاباً')} و{count(passages.length, 'نص', 'نصان', 'نصوص', 'نصاً')} من هذا الجهاز. ويختفي من النسخة العامة بعد النشر.</span>
+        <ConfirmButton label="حذف العلم" confirm="حذف العلم وكل ما فيه؟" onConfirm={removeScience} />
+      </div>
+      {toast}
+    </section>
   )
 }

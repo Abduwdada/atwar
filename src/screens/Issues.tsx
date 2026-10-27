@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { sp } from '../nav'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { db, deletePassage } from '../data/db'
 import { useStore } from '../data/store'
@@ -7,48 +8,95 @@ import { Badge, ConfirmButton, DiffText, PageHead, ar, count, pct, yr } from '..
 import { compare } from '../engine/compare'
 import type { PassageAnalysis } from '../engine/analyse'
 import { IssueForm } from '../ui/forms'
+import { issueKey } from '../data/store'
+import { useListPrefs, usePrefs } from '../data/prefs'
+import type { Relation } from '../engine/compare'
+
+const REL_GROUPS: Record<string, Relation[]> = {
+  copy: ['verbatim', 'expand', 'abridge', 'substitute'],
+  adapt: ['adapt', 'influence'],
+  own: ['independent', 'first'],
+}
 import * as Icon from '../ui/icons'
 
 export function IssueList() {
-  const { issues, passages, canEdit, science } = useStore()
+  const { issues, passages, canEdit } = useStore()
   const [q, setQ] = useState('')
   const [adding, setAdding] = useState(false)
+  const [ordering, setOrdering] = useState(false)
   const nav = useNavigate()
+  const [o, set] = useListPrefs('issues', { sort: 'order', group: true })
   const counts = useMemo(() => {
     const m = new Map<string, number>()
     passages.forEach(p => m.set(p.issueId, (m.get(p.issueId) ?? 0) + 1))
     return m
   }, [passages])
-  const groups = useMemo(() => {
-    const t = q.trim()
-    const g = new Map<string, typeof issues>()
-    issues.filter(i => !t || i.name.includes(t) || i.section?.includes(t))
-      .forEach(i => g.set(i.section ?? 'بلا باب', [...(g.get(i.section ?? 'بلا باب') ?? []), i]))
-    return [...g.entries()]
-  }, [issues, q])
+  const t = q.trim()
+  const shown = issues
+    .filter(i => !t || i.name.includes(t) || i.section?.includes(t))
+    .sort((x, y) => o.sort === 'name' ? x.name.localeCompare(y.name, 'ar')
+      : o.sort === 'texts' ? (counts.get(y.id) ?? 0) - (counts.get(x.id) ?? 0)
+      : o.sort === 'recent' ? y.createdAt - x.createdAt : issueKey(x) - issueKey(y))
+  const groups: [string, typeof shown][] = o.group
+    ? [...shown.reduce((m, i) => m.set(i.section ?? 'بلا باب', [...(m.get(i.section ?? 'بلا باب') ?? []), i]), new Map<string, typeof shown>())]
+    : [['', shown]]
+  const canOrder = canEdit && o.sort === 'order' && !t
+
+  // تبديل موضع مسألتين متجاورتين في الترتيب
+  async function move(list: typeof shown, i: number, dir: -1 | 1) {
+    const a = list[i], b = list[i + dir]
+    if (!a || !b) return
+    const ka = issueKey(a), kb = issueKey(b)
+    await db.transaction('rw', db.issues, async () => {
+      await db.issues.update(a.id, { order: kb === ka ? kb + dir : kb })
+      await db.issues.update(b.id, { order: ka })
+    })
+  }
 
   return (
-    <>
-      <PageHead title="المسائل والمصطلحات" sub={`${science?.name ?? ''} · ${count(issues.length, 'مسألة', 'مسألتان', 'مسائل', 'مسألة')}`}
-        action={canEdit && <button className="btn sm" onClick={() => setAdding(a => !a)}><Icon.Plus />مسألة</button>} />
-      {adding && <IssueForm onSaved={i => nav(`/issues/${i.id}`)} onCancel={() => setAdding(false)} />}
-      <div className="search"><Icon.Search /><input id="issues-q" className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث في المسائل" /></div>
+    <section className="stack">
+      <div className="toolbar-row">
+        <div className="search grow"><Icon.Search /><input id="issues-q" className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث في المسائل والأبواب" /></div>
+        {canEdit && <button className="btn primary" onClick={() => setAdding(a => !a)}><Icon.Plus />إضافة مسألة</button>}
+      </div>
+      {adding && <IssueForm onSaved={i => nav(sp(`/issues/${i.id}`))} onCancel={() => setAdding(false)} />}
+      <div className="controls">
+        <label className="ctl"><span>الترتيب</span>
+          <select id="issues-sort" value={o.sort} onChange={e => { set('sort', e.target.value); setOrdering(false) }}>
+            <option value="order">ترتيب المؤلف</option>
+            <option value="name">الاسم</option>
+            <option value="texts">الأكثر نصوصاً</option>
+            <option value="recent">الأحدث إضافةً</option>
+          </select>
+        </label>
+        <label className="check ctl-check"><input id="issues-group" type="checkbox" checked={o.group} onChange={e => set('group', e.target.checked)} />تجميع بالأبواب</label>
+        {canOrder && <button className={'btn sm' + (ordering ? ' primary' : '')} onClick={() => setOrdering(x => !x)}>{ordering ? 'تم الترتيب' : 'تغيير الترتيب'}</button>}
+        <span className="ctl-count">{count(shown.length, 'مسألة', 'مسألتان', 'مسائل', 'مسألة')}</span>
+      </div>
       {groups.map(([section, list]) => (
-        <div className="stack tight" key={section}>
-          <div className="section-label">{section}</div>
+        <div className="stack tight" key={section || 'all'}>
+          {section && <div className="section-label">{section}</div>}
           <div className="list">
-            {list.map(i => (
-              <Link key={i.id} className="item" to={`/issues/${i.id}`}>
-                <div className="grow"><div className="title">{i.name}</div></div>
-                <span className="end">{count(counts.get(i.id) ?? 0, 'نص', 'نصان', 'نصوص', 'نصاً')}</span>
-                <Icon.ChevronIn />
-              </Link>
+            {list.map((i, idx) => (
+              <div key={i.id} className="item-row">
+                <Link className="item" to={sp(`/issues/${i.id}`)}>
+                  <div className="grow"><div className="title">{i.name}</div>{!o.group && i.section && <div className="meta">{i.section}</div>}</div>
+                  <span className="end">{count(counts.get(i.id) ?? 0, 'نص', 'نصان', 'نصوص', 'نصاً')}</span>
+                  {!ordering && <Icon.ChevronIn />}
+                </Link>
+                {ordering && canOrder && (
+                  <span className="order-btns">
+                    <button className="icon-btn" disabled={idx === 0} onClick={() => move(list, idx, -1)} aria-label="تقديم"><Icon.Up /></button>
+                    <button className="icon-btn" disabled={idx === list.length - 1} onClick={() => move(list, idx, 1)} aria-label="تأخير"><Icon.Down /></button>
+                  </span>
+                )}
+              </div>
             ))}
           </div>
         </div>
       ))}
-      {!issues.length && !adding && <div className="empty card">{canEdit ? 'لا توجد مسائل بعد. أضف أول مسألة أو مصطلح.' : 'لم تُنشر مسائل بعد.'}</div>}
-    </>
+      {!shown.length && <div className="empty card">{issues.length ? 'لا مسائل تطابق البحث.' : canEdit ? 'ابدأ بإضافة أول مسألة أو مصطلح في هذا العلم.' : 'لم تُنشر مسائل بعد.'}</div>}
+    </section>
   )
 }
 
@@ -59,7 +107,9 @@ export function IssuePage() {
   const { issueById, passages, analysis, canEdit } = useStore()
   const issue = issueById.get(id)
   const [editing, setEditing] = useState(false)
-  const [showDel, setShowDel] = useState(true)
+  const { prefs, setPref } = usePrefs()
+  const showDel = prefs.showDel
+  const [o, set] = useListPrefs('issue', { rel: 'all', compact: false })
   const [pair, setPair] = useState<[string, string] | null>(null)
 
   const list = useMemo(() =>
@@ -68,6 +118,7 @@ export function IssuePage() {
       .filter(Boolean)
       .sort((a, b) => a.book.death - b.book.death || a.passage.createdAt - b.passage.createdAt),
   [passages, analysis, id])
+  const visible = (prefs.oldestFirst ? list : [...list].reverse()).filter(a => REL_GROUPS[o.rel]?.includes(a.relation) ?? true)
 
   useEffect(() => {
     const el = hash && document.getElementById(hash.slice(1))
@@ -78,7 +129,7 @@ export function IssuePage() {
     return () => clearTimeout(t)
   }, [hash, list.length])
 
-  if (!issue) return <div className="empty">هذه المسألة غير موجودة. <Link to="/issues">كل المسائل</Link></div>
+  if (!issue) return <div className="empty">هذه المسألة غير موجودة. <Link to={sp('/issues')}>كل المسائل</Link></div>
 
   // لوحة المقارنة: افتراضياً آخر نص مع مصدره
   const lastWithSource = [...list].reverse().find(a => a.source)
@@ -94,7 +145,7 @@ export function IssuePage() {
       await db.passages.where({ issueId: id }).delete()
       await db.issues.delete(id)
     })
-    nav('/issues')
+    nav(sp('/issues'))
   }
 
   const books = new Set(list.map(a => a.book.id)).size
@@ -102,7 +153,7 @@ export function IssuePage() {
 
   return (
     <>
-      <PageHead back="/issues" title={issue.name}
+      <PageHead back={sp("/issues")} title={issue.name}
         sub={[issue.section, list.length && count(list.length, 'نص', 'نصان', 'نصوص', 'نصاً'), books > 1 && count(books, 'كتاب', 'كتابان', 'كتب', 'كتاباً'), span > 0 && `على مدى ${ar(span)} سنة`].filter(Boolean).join(' · ')}
         action={canEdit && <button className="icon-btn" onClick={() => setEditing(e => !e)} aria-label="تعديل المسألة"><Icon.Edit /></button>} />
       {editing && (
@@ -112,11 +163,24 @@ export function IssuePage() {
         </div>
       )}
 
-      <div className="row" style={{ alignItems: 'center' }}>
-        {canEdit && <Link className="btn primary" to={`/add?issue=${id}`} style={{ flex: '0 1 auto' }}><Icon.Plus />نص لهذه المسألة</Link>}
-        <label className="check small muted" style={{ flex: '0 1 auto' }}>
-          <input id="show-del" type="checkbox" checked={showDel} onChange={e => setShowDel(e.target.checked)} />إظهار المحذوف من المصدر
+      <div className="controls">
+        {canEdit && <Link className="btn primary sm" to={sp(`/add?issue=${id}`)}><Icon.Plus />نص لهذه المسألة</Link>}
+        <label className="ctl"><span>الترتيب</span>
+          <select id="issue-order" value={prefs.oldestFirst ? 'old' : 'new'} onChange={e => setPref('oldestFirst', e.target.value === 'old')}>
+            <option value="old">الأقدم أولاً</option>
+            <option value="new">الأحدث أولاً</option>
+          </select>
         </label>
+        <label className="ctl"><span>العلاقة</span>
+          <select id="issue-rel" value={o.rel} onChange={e => set('rel', e.target.value)}>
+            <option value="all">كل النصوص</option>
+            <option value="copy">النقل (بالنص، بزيادة، باختصار، بإبدال)</option>
+            <option value="adapt">التصرف والتأثر</option>
+            <option value="own">المستقلة وأقدم النصوص</option>
+          </select>
+        </label>
+        <label className="check ctl-check"><input id="show-del" type="checkbox" checked={showDel} onChange={e => setPref('showDel', e.target.checked)} />المحذوف من المصدر</label>
+        <label className="check ctl-check"><input id="issue-compact" type="checkbox" checked={o.compact} onChange={e => set('compact', e.target.checked)} />عرض مختصر</label>
       </div>
       <div className="keys">
         <span><ins>زيادة</ins> على المصدر</span>
@@ -126,8 +190,8 @@ export function IssuePage() {
 
       {list.length ? (
         <div className="issue-grid">
-          <div className="timeline">
-            {list.map(a => {
+          <div className={'timeline' + (o.compact ? ' compact' : '')}>
+            {visible.map(a => {
               const p = a.passage
               const place = [p.volume && `الجزء ${p.volume}`, p.page && `ص ${p.page}`, p.edition].filter(Boolean).join(' · ')
               const current = p.source?.mode === 'manual' ? p.source.passageId : p.source?.mode === 'none' ? 'none' : ''
@@ -135,7 +199,7 @@ export function IssuePage() {
               return (
                 <article className={'tcard' + (inPair ? ' paired' : '')} id={p.id} key={p.id}>
                   <header>
-                    <h3><Link to={`/books/${a.book.id}`}>{a.book.title}</Link></h3>
+                    <h3><Link to={sp(`/books/${a.book.id}`)}>{a.book.title}</Link></h3>
                     <span className="who">{a.book.author} · <span className="num">{yr(a.book)}</span>{a.book.school ? ` · ${a.book.school}` : ''}</span>
                   </header>
                   <div className="relline">
@@ -164,12 +228,13 @@ export function IssuePage() {
                         {p.confirmed ? 'إلغاء الاعتماد' : 'اعتماد الصلة'}
                       </button>
                     )}
-                    {canEdit && <Link className="btn sm ghost" to={`/passages/${p.id}/edit`}><Icon.Edit />تعديل</Link>}
+                    {canEdit && <Link className="btn sm ghost" to={sp(`/passages/${p.id}/edit`)}><Icon.Edit />تعديل</Link>}
                     {canEdit && <ConfirmButton label="حذف" confirm="حذف هذا النص؟" onConfirm={() => deletePassage(p.id)} />}
                   </div>
                 </article>
               )
             })}
+            {!visible.length && <div className="empty">لا نصوص بهذه العلاقة في هذه المسألة.</div>}
           </div>
           <ComparePanel list={list} aId={aId} bId={bId} onChange={setPair} />
         </div>

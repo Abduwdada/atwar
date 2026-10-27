@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
+import { sp } from '../nav'
 import { Link } from 'react-router-dom'
 import { useStore } from '../data/store'
 import { tokenize } from '../engine/arabic'
 import { compare } from '../engine/compare'
-import { Badge, DiffText, PageHead, ar, pct, yr } from '../ui/bits'
+import { Badge, DiffText, ar, pct, yr } from '../ui/bits'
+import { useListPrefs } from '../data/prefs'
 
 export function Matrix() {
   const { books, issues, passages, analysis } = useStore()
@@ -12,24 +14,38 @@ export function Matrix() {
     passages.forEach(p => { if (!m.has(p.issueId + '|' + p.bookId)) m.set(p.issueId + '|' + p.bookId, p.id) })
     return m
   }, [passages])
-  const usedBooks = books
+  const [o, set] = useListPrefs('matrix', { section: '', hideEmpty: true })
+  const withTexts = new Set(passages.map(p => p.bookId))
+  const usedBooks = o.hideEmpty ? books.filter(b => withTexts.has(b.id)) : books
+  const sections = [...new Set(issues.map(i => i.section).filter(Boolean))] as string[]
+  const rows = issues.filter(i => !o.section || i.section === o.section)
 
   return (
     <>
-      <PageHead title="المصفوفة" sub="المسائل صفوفاً، والكتب أعمدةً مرتبة بسنة الوفاة" />
-      {issues.length && usedBooks.length ? (
+      <div className="controls">
+        <span className="small muted">المسائل صفوفاً، والكتب أعمدةً بسنة الوفاة</span>
+        {sections.length > 1 && (
+          <label className="ctl"><span>الباب</span>
+            <select id="matrix-section" value={o.section} onChange={e => set('section', e.target.value)}>
+              <option value="">كل الأبواب</option>{sections.map(x => <option key={x}>{x}</option>)}
+            </select>
+          </label>
+        )}
+        <label className="check ctl-check"><input id="matrix-empty" type="checkbox" checked={o.hideEmpty} onChange={e => set('hideEmpty', e.target.checked)} />إخفاء الكتب بلا نصوص</label>
+      </div>
+      {rows.length && usedBooks.length ? (
         <div className="scroller">
           <table className="matrix">
             <thead>
               <tr>
                 <th className="corner">المسألة</th>
-                {usedBooks.map(b => <th key={b.id}><Link to={`/books/${b.id}`}>{b.title}</Link><small>{yr(b)}</small></th>)}
+                {usedBooks.map(b => <th key={b.id}><Link to={sp(`/books/${b.id}`)}>{b.title}</Link><small>{yr(b)}</small></th>)}
               </tr>
             </thead>
             <tbody>
-              {issues.map(i => (
+              {rows.map(i => (
                 <tr key={i.id}>
-                  <th className="rowh" scope="row">{i.section && <small>{i.section}</small>}<Link to={`/issues/${i.id}`}>{i.name}</Link></th>
+                  <th className="rowh" scope="row">{i.section && <small>{i.section}</small>}<Link to={sp(`/issues/${i.id}`)}>{i.name}</Link></th>
                   {usedBooks.map(b => {
                     const pid = cell.get(i.id + '|' + b.id)
                     const a = pid ? analysis.passages.get(pid) : undefined
@@ -37,7 +53,7 @@ export function Matrix() {
                     const words = a.passage.body.split(/\s+/)
                     return (
                       <td key={b.id}>
-                        <Link to={`/issues/${i.id}#${a.passage.id}`}>
+                        <Link to={sp(`/issues/${i.id}#${a.passage.id}`)}>
                           <span className="snip">{words.slice(0, 7).join(' ')}{words.length > 7 ? '…' : ''}</span>
                           <Badge relation={a.relation} manual={a.manual} />
                         </Link>
@@ -66,7 +82,7 @@ export function Tree() {
   const schools = [...new Set(books.map(b => b.school || 'غير محدد'))]
   const colorOf = (s?: string) => `var(--cat-${(schools.indexOf(s || 'غير محدد') % 6) + 1})`
 
-  if (!books.length) return <><PageHead title="شجرة الكتب" /><div className="empty card">أضف كتباً ونصوصاً لتظهر الشجرة.</div></>
+  if (!books.length) return <div className="empty card">أضف كتباً ونصوصاً لتظهر الشجرة.</div>
 
   // الزمن يتنزّل من الأعلى: لكل كتاب صف بحسب سنة وفاته، فلا تتداخل الأسماء
   const row = new Map(books.map((b, i) => [b.id, i]))
@@ -98,8 +114,8 @@ export function Tree() {
 
   return (
     <>
-      <PageHead title="شجرة الكتب" sub="الأقدم في الأعلى، وكل كتاب تحت أصله" />
       <div className="legend">
+        <span>الأقدم في الأعلى، وكل كتاب تحت أصله.</span>
         <label className="check"><input id="tg-inf" type="checkbox" checked={showInf} onChange={e => setShowInf(e.target.checked)} /><span className="swl" />مستنتجة من النصوص</label>
         <label className="check"><input id="tg-dec" type="checkbox" checked={showDec} onChange={e => setShowDec(e.target.checked)} /><span className="swl dash" />معلنة</label>
         {schools.map(s => <span key={s}><i className="sw-dot" style={{ background: colorOf(s) }} />{s}</span>)}
@@ -152,7 +168,7 @@ export function Tree() {
         <div className="card">
           <div className="page-head" style={{ minHeight: 0 }}>
             <strong style={{ fontFamily: 'var(--f-text)', fontSize: 22 }}>{title(sel)}</strong>
-            <Link className="btn sm" to={`/books/${sel}`}>صفحة الكتاب</Link>
+            <Link className="btn sm" to={sp(`/books/${sel}`)}>صفحة الكتاب</Link>
           </div>
           <span className="small muted">
             {analysis.parent.get(sel) ? `أصله المستنتج: ${title(analysis.parent.get(sel)!.from)}` : 'لا يظهر له أصل في النصوص'}
@@ -190,7 +206,7 @@ export function Compare() {
 
   return (
     <>
-      <PageHead title="مقارنة نصين" sub="يُعامل الأقدم منهما مصدراً" />
+      <p className="small muted" style={{ margin: 0 }}>اختر أي نصين من هذا العلم، ويُعامل الأقدم منهما مصدراً.</p>
       <div className="row">
         <label className="field"><span>النص الأول</span><select id="cmp-a" className="select" value={aId} onChange={e => setA(e.target.value)}>{options}</select></label>
         <label className="field"><span>النص الثاني</span><select id="cmp-b" className="select" value={bId} onChange={e => setB(e.target.value)}>{options}</select></label>
@@ -217,7 +233,7 @@ export function Compare() {
         {ranked.length > 0 && (
           <div className="list">
             {ranked.map(({ p, c }) => (
-              <Link key={p.id} className="item" to={`/issues/${p.issueId}#${p.id}`}>
+              <Link key={p.id} className="item" to={sp(`/issues/${p.issueId}#${p.id}`)}>
                 <div className="grow"><div className="title">{bookById.get(p.bookId)?.title}</div><div className="meta">{issues.find(i => i.id === p.issueId)?.name}</div></div>
                 <span className="num">{pct(c.sim)}</span>
               </Link>

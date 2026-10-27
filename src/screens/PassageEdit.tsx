@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { sp } from '../nav'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { db, deletePassage } from '../data/db'
 import { useStore } from '../data/store'
@@ -9,7 +10,7 @@ export default function PassageEdit() {
   const { id = '' } = useParams()
   const { passages } = useStore()
   const p = passages.find(x => x.id === id)
-  if (!p) return <div className="empty">هذا النص غير موجود. <Link to="/issues">المسائل</Link></div>
+  if (!p) return <div className="empty">هذا النص غير موجود. <Link to={sp('/issues')}>المسائل</Link></div>
   return <Editor p={p} key={p.id} />
 }
 
@@ -22,7 +23,7 @@ function Editor({ p }: { p: Passage }) {
   })
   const [error, setError] = useState('')
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => { setF({ ...f, [k]: e.target.value }); setError('') }
-  const back = `/issues/${p.issueId}#${p.id}`
+  const back = sp(`/issues/${p.issueId}#${p.id}`)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -36,7 +37,7 @@ function Editor({ p }: { p: Passage }) {
       ...(moved ? { source: undefined, confirmed: false } : {}),
       updatedAt: Date.now(),
     })
-    nav(`/issues/${f.issueId}#${p.id}`)
+    nav(sp(`/issues/${f.issueId}#${p.id}`))
   }
 
   return (
@@ -69,7 +70,7 @@ function Editor({ p }: { p: Passage }) {
           <Link className="btn" to={back}>إلغاء</Link>
         </div>
       </form>
-      <ConfirmButton label="حذف النص" confirm="حذف هذا النص نهائياً؟" onConfirm={async () => { await deletePassage(p.id); nav(`/issues/${p.issueId}`) }} />
+      <ConfirmButton label="حذف النص" confirm="حذف هذا النص نهائياً؟" onConfirm={async () => { await deletePassage(p.id); nav(sp(`/issues/${p.issueId}`)) }} />
     </>
   )
 }

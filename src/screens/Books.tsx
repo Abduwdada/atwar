@@ -1,4 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { sp } from '../nav'
+import { useListPrefs } from '../data/prefs'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { db, newId } from '../data/db'
 import { useStore } from '../data/store'
@@ -6,39 +8,85 @@ import { Badge, ConfirmButton, PageHead, ar, count, pct, yr } from '../ui/bits'
 import { BookForm } from '../ui/forms'
 import * as Icon from '../ui/icons'
 
+const CENTURY = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر', 'الحادي عشر', 'الثاني عشر', 'الثالث عشر', 'الرابع عشر', 'الخامس عشر']
+const centuryName = (d: number) => `القرن ${CENTURY[Math.floor(d / 100)] ?? ar(Math.floor(d / 100) + 1)}`
+
 export function BookList() {
-  const { books, passages, canEdit, science } = useStore()
+  const { books, passages, canEdit } = useStore()
   const [q, setQ] = useState('')
   const [adding, setAdding] = useState(false)
   const nav = useNavigate()
+  const [o, set] = useListPrefs('books', { sort: 'death', school: '', kind: '', group: true })
   const counts = useMemo(() => {
     const m = new Map<string, number>()
     passages.forEach(p => m.set(p.bookId, (m.get(p.bookId) ?? 0) + 1))
     return m
   }, [passages])
+  const schools = [...new Set(books.map(b => b.school).filter(Boolean))] as string[]
+  const kinds = [...new Set(books.map(b => b.kind).filter(Boolean))] as string[]
   const t = q.trim()
-  const shown = books.filter(b => !t || b.title.includes(t) || b.author.includes(t))
+  const shown = books
+    .filter(b => (!t || b.title.includes(t) || b.author.includes(t)) && (!o.school || b.school === o.school) && (!o.kind || b.kind === o.kind))
+    .sort((x, y) => o.sort === 'title' ? x.title.localeCompare(y.title, 'ar')
+      : o.sort === 'texts' ? (counts.get(y.id) ?? 0) - (counts.get(x.id) ?? 0)
+      : o.sort === 'death-desc' ? y.death - x.death : x.death - y.death)
+  const byCentury = o.group && o.sort.startsWith('death')
+  const groups: [string, typeof shown][] = byCentury
+    ? [...shown.reduce((m, b) => m.set(centuryName(b.death), [...(m.get(centuryName(b.death)) ?? []), b]), new Map<string, typeof shown>())]
+    : [['', shown]]
 
   return (
-    <>
-      <PageHead title="الكتب" sub={`${science?.name ?? ''} · ${count(books.length, 'كتاب', 'كتابان', 'كتب', 'كتاباً')}، مرتبة بسنة الوفاة`}
-        action={canEdit && <button className="btn sm" onClick={() => setAdding(a => !a)}><Icon.Plus />كتاب</button>} />
-      {adding && <BookForm onSaved={b => nav(`/books/${b.id}`)} onCancel={() => setAdding(false)} />}
-      <div className="search"><Icon.Search /><input id="books-q" className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث بالعنوان أو المؤلف" /></div>
-      {shown.length > 0 && (
-        <div className="list">
-          {shown.map(b => (
-            <Link key={b.id} className="item" to={`/books/${b.id}`}>
-              <span className="num muted" style={{ width: 44, fontSize: 14 }}>{ar(b.death)}هـ</span>
-              <div className="grow"><div className="title">{b.title}</div><div className="meta">{b.author}</div></div>
-              <span className="end">{count(counts.get(b.id) ?? 0, 'نص', 'نصان', 'نصوص', 'نصاً')}</span>
-              <Icon.ChevronIn />
-            </Link>
-          ))}
+    <section className="stack">
+      <div className="toolbar-row">
+        <div className="search grow"><Icon.Search /><input id="books-q" className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث بالعنوان أو المؤلف" /></div>
+        {canEdit && <button className="btn primary" onClick={() => setAdding(a => !a)}><Icon.Plus />إضافة كتاب</button>}
+      </div>
+      {adding && <BookForm onSaved={b => nav(sp(`/books/${b.id}`))} onCancel={() => setAdding(false)} />}
+      <div className="controls">
+        <label className="ctl"><span>الترتيب</span>
+          <select id="books-sort" value={o.sort} onChange={e => set('sort', e.target.value)}>
+            <option value="death">الأقدم وفاةً أولاً</option>
+            <option value="death-desc">الأحدث وفاةً أولاً</option>
+            <option value="title">العنوان</option>
+            <option value="texts">الأكثر نصوصاً</option>
+          </select>
+        </label>
+        {schools.length > 1 && (
+          <label className="ctl"><span>المذهب</span>
+            <select id="books-school" value={o.school} onChange={e => set('school', e.target.value)}>
+              <option value="">الكل</option>{schools.map(x => <option key={x}>{x}</option>)}
+            </select>
+          </label>
+        )}
+        {kinds.length > 1 && (
+          <label className="ctl"><span>النوع</span>
+            <select id="books-kind" value={o.kind} onChange={e => set('kind', e.target.value)}>
+              <option value="">الكل</option>{kinds.map(x => <option key={x}>{x}</option>)}
+            </select>
+          </label>
+        )}
+        {o.sort.startsWith('death') && (
+          <label className="check ctl-check"><input id="books-group" type="checkbox" checked={o.group} onChange={e => set('group', e.target.checked)} />تجميع بالقرون</label>
+        )}
+        <span className="ctl-count">{count(shown.length, 'كتاب', 'كتابان', 'كتب', 'كتاباً')}</span>
+      </div>
+      {groups.map(([label, list]) => (
+        <div className="stack tight" key={label || 'all'}>
+          {label && <div className="section-label">{label}</div>}
+          <div className="list">
+            {list.map(b => (
+              <Link key={b.id} className="item" to={sp(`/books/${b.id}`)}>
+                <span className="num muted year-col">{ar(b.death)}هـ</span>
+                <div className="grow"><div className="title">{b.title}</div><div className="meta">{[b.author, b.school, b.kind].filter(Boolean).join(' · ')}</div></div>
+                <span className="end">{count(counts.get(b.id) ?? 0, 'نص', 'نصان', 'نصوص', 'نصاً')}</span>
+                <Icon.ChevronIn />
+              </Link>
+            ))}
+          </div>
         </div>
-      )}
-      {!books.length && !adding && <div className="empty card">{canEdit ? 'لا توجد كتب بعد.' : 'لم تُنشر كتب بعد.'}</div>}
-    </>
+      ))}
+      {!shown.length && <div className="empty card">{books.length ? 'لا كتب تطابق البحث أو التصفية.' : canEdit ? 'ابدأ بإضافة أول كتاب في هذا العلم.' : 'لم تُنشر كتب بعد.'}</div>}
+    </section>
   )
 }
 
@@ -49,7 +97,7 @@ export function BookPage() {
   const book = bookById.get(id)
   const [editing, setEditing] = useState(false)
   const [linking, setLinking] = useState(false)
-  if (!book) return <div className="empty">هذا الكتاب غير موجود. <Link to="/books">كل الكتب</Link></div>
+  if (!book) return <div className="empty">هذا الكتاب غير موجود. <Link to={sp('/books')}>كل الكتب</Link></div>
 
   const own = passages.filter(p => p.bookId === id).map(p => analysis.passages.get(p.id)!).filter(Boolean)
   const parent = analysis.parent.get(id)
@@ -60,7 +108,7 @@ export function BookPage() {
   const declared = links.filter(l => l.from === id || l.to === id)
   const issuesOf = (items: { issueId: string; sim: number }[]) =>
     items.map(i => `${issueById.get(i.issueId)?.name.replace(/^تعريف /, '') ?? ''} ${pct(i.sim)}`).join('، ')
-  const B = ({ bid }: { bid: string }) => <Link to={`/books/${bid}`}>{bookById.get(bid)?.title}</Link>
+  const B = ({ bid }: { bid: string }) => <Link to={sp(`/books/${bid}`)}>{bookById.get(bid)?.title}</Link>
 
   async function remove() {
     await db.transaction('rw', db.books, db.passages, db.links, async () => {
@@ -69,12 +117,12 @@ export function BookPage() {
       await db.links.where('to').equals(id).delete()
       await db.books.delete(id)
     })
-    nav('/books')
+    nav(sp('/books'))
   }
 
   return (
     <>
-      <PageHead back="/books" title={book.title}
+      <PageHead back={sp("/books")} title={book.title}
         sub={[book.author, yr(book) + (book.deathNote ? ` (${book.deathNote})` : ''), book.school, book.kind].filter(Boolean).join(' · ')}
         action={canEdit && <button className="icon-btn" onClick={() => setEditing(e => !e)} aria-label="تعديل الكتاب"><Icon.Edit /></button>} />
       {editing && (
@@ -84,7 +132,7 @@ export function BookPage() {
         </div>
       )}
 
-      {canEdit && <Link className="btn primary" to={`/add?book=${id}`}><Icon.Plus />نص من هذا الكتاب</Link>}
+      {canEdit && <Link className="btn primary" to={sp(`/add?book=${id}`)}><Icon.Plus />نص من هذا الكتاب</Link>}
 
       <div className="card">
         <div className="section-label" style={{ margin: 0 }}>الأصل المستنتج من النصوص</div>
@@ -137,7 +185,7 @@ export function BookPage() {
         {own.length ? (
           <div className="list">
             {own.map(a => (
-              <Link key={a.passage.id} className="item" to={`/issues/${a.passage.issueId}#${a.passage.id}`}>
+              <Link key={a.passage.id} className="item" to={sp(`/issues/${a.passage.issueId}#${a.passage.id}`)}>
                 <div className="grow"><div className="title">{issueById.get(a.passage.issueId)?.name}</div>
                   {a.source && <div className="meta">عن {a.source.book.title} · {pct(a.source.cmp.sim)}</div>}</div>
                 <Badge relation={a.relation} manual={a.manual} />

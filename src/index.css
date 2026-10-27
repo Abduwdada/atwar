@@ -19,10 +19,11 @@
   --radius: 12px;
   --cat-1: #2e6a9c; --cat-2: #9a5b23; --cat-3: #7b4d9c; --cat-4: #56635e; --cat-5: #b0476a; --cat-6: #3f7d3a;
   --nav-h: 64px;
+  --text-size: 21px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --paper: #111614;
     --surface: #19201d;
     --sunken: #0d1110;
@@ -39,6 +40,23 @@
     --cat-1: #73a9da; --cat-2: #d99a5e; --cat-3: #b791d8; --cat-4: #9aa8a2; --cat-5: #e07fa0; --cat-6: #7fc077;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+    --paper: #111614;
+    --surface: #19201d;
+    --sunken: #0d1110;
+    --ink: #e4eae6;
+    --muted: #98a59f;
+    --line: #2b3531;
+    --accent: #5dbfa4;
+    --accent-ink: #0e1a16;
+    --accent-soft: #1b3a31;
+    --rubric: #e58077;
+    --rubric-soft: #3a2220;
+    --gold: #d6b45e;
+    --gold-soft: #3a3220;
+    --cat-1: #73a9da; --cat-2: #d99a5e; --cat-3: #b791d8; --cat-4: #9aa8a2; --cat-5: #e07fa0; --cat-6: #7fc077;
+    color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -81,7 +99,7 @@ a { color: var(--accent); }
   height: calc(var(--nav-h) + env(safe-area-inset-bottom));
   padding: 0 max(8px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(8px, env(safe-area-inset-left));
   background: var(--surface); border-top: 1px solid var(--line);
-  display: grid; grid-template-columns: repeat(5, 1fr); align-items: center;
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: center;
 }
 .tabbar a {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -179,7 +197,9 @@ a { color: var(--accent); }
 .badge.s0 { border: 1px solid var(--line); color: var(--muted); }
 .badge.sf { border: 1px dashed var(--line); color: var(--muted); }
 .badge.mine { background: var(--gold-soft); color: var(--gold); }
-.text { font-family: var(--f-text); font-size: 21px; line-height: 2; margin: 0; }
+.text { font-family: var(--f-text); font-size: var(--text-size); line-height: 2; margin: 0; }
+:root[data-text="sm"] { --text-size: 18px; }
+:root[data-text="lg"] { --text-size: 25px; }
 .text .lead { color: var(--muted); }
 ins { text-decoration: none; background: var(--accent-soft); border-radius: 4px; padding: 0 3px; }
 ins.nv { background: var(--gold-soft); box-shadow: inset 0 -2px 0 var(--gold); }
@@ -355,3 +375,53 @@ table.matrix { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 .how li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; counter-increment: how; }
 .how li::before { content: counter(how, arabic-indic); font-family: var(--f-brand); font-size: 22px; color: var(--accent); line-height: 1; }
 .how li span { color: var(--muted); font-size: 14.5px; }
+
+/* صفحة العلم */
+.science { display: flex; flex-direction: column; gap: 18px; }
+.sci-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.sci-title { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sci-title h1 { margin: 0; font-family: var(--f-brand); font-size: clamp(30px, 5vw, 44px); line-height: 1.2; font-weight: 700; }
+.sci-desc { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+.sci-actions { display: flex; gap: 6px; align-items: center; flex: none; }
+.sci-tabs {
+  display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line);
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); margin-top: -4px;
+}
+.sci-tabs::-webkit-scrollbar { display: none; }
+.sci-tabs a { padding: 10px 14px; white-space: nowrap; color: var(--muted); text-decoration: none; font-weight: 500; border-bottom: 2px solid transparent; }
+.sci-tabs a:hover { color: var(--ink); }
+.sci-tabs a.active { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* أدوات القوائم */
+.toolbar-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.toolbar-row .grow { flex: 1 1 240px; min-width: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); font-size: 14px; }
+.ctl { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.ctl select { min-height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); padding: 2px 8px; color: var(--ink); max-width: 100%; }
+.ctl-check { color: var(--muted); font-size: 14px; }
+.ctl-count { margin-right: auto; color: var(--muted); font-size: 13px; }
+.year-col { width: 52px; font-size: 14px; flex: none; }
+.item-row { display: flex; align-items: center; }
+.item-row .item { flex: 1; min-width: 0; }
+.order-btns { display: flex; padding-left: 6px; }
+.order-btns .icon-btn:disabled { opacity: .3; }
+.timeline.compact .tcard { gap: 6px; padding: 12px 16px; }
+.timeline.compact .tools, .timeline.compact .tcard > .small, .timeline.compact .tcard > .warn { display: none; }
+.narrow { max-width: 760px; }
+
+/* الإعدادات */
+.settings { gap: 16px; }
+.setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.setting > span { font-weight: 500; }
+.seg { display: inline-flex; background: var(--sunken); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: none; padding: 6px 14px; border-radius: 8px; cursor: pointer; color: var(--muted); font-size: 14px; }
+.seg button.on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.sample-text { border-top: 1px solid var(--line); padding-top: 12px; }
+.danger-zone strong { color: var(--rubric); }
+
+/* القائمة الجانبية */
+.side-sci { padding-right: 42px !important; }
+.side-spacer { flex: 1; }
+.side-foot { padding: 6px 12px 0; }
+.side-foot .pending { color: var(--gold); padding: 0; background: none; display: inline; font-weight: 600; }
+.tab-sci { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -1,13 +1,26 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { db, newId } from '../data/db'
 import { useStore } from '../data/store'
 import { ar, count } from '../ui/bits'
 import * as Icon from '../ui/icons'
 
 // الواجهة العامة للمنصة: ما هي، والعلوم المرصودة فيها
 export default function Landing() {
-  const { sciences, scienceStats, setScienceId, canEdit } = useStore()
+  const { sciences, scienceStats, canEdit } = useStore()
   const nav = useNavigate()
-  const open = (id: string) => { setScienceId(id); nav('/science') }
+  const open = (id: string) => nav(`/s/${id}`)
+  const [adding, setAdding] = useState(false)
+  const [name, setName] = useState('')
+  const [error, setError] = useState('')
+
+  async function addScience(e: FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return setError('اكتب اسم العلم.')
+    const id = newId()
+    await db.sciences.add({ id, name: name.trim(), createdAt: Date.now() })
+    nav(`/s/${id}/books`)
+  }
 
   return (
     <>
@@ -23,8 +36,17 @@ export default function Landing() {
       <section className="stack tight">
         <div className="section-head">
           <h2>العلوم المرصودة</h2>
-          {canEdit && <Link to="/more">علم جديد</Link>}
+          {canEdit && <button className="btn sm" onClick={() => setAdding(a => !a)}><Icon.Plus />علم جديد</button>}
         </div>
+        {adding && (
+          <form className="card" onSubmit={addScience} noValidate>
+            <label className="field"><span>اسم العلم</span>
+              <input id="new-science" className="input" value={name} onChange={e => { setName(e.target.value); setError('') }} placeholder="مثل: النحو، أو مصطلح الحديث" autoFocus />
+            </label>
+            {error && <p className="warn" role="alert" style={{ margin: 0 }}>{error}</p>}
+            <div className="row"><button className="btn primary" type="submit">إنشاء العلم</button><button className="btn" type="button" onClick={() => setAdding(false)}>إلغاء</button></div>
+          </form>
+        )}
         {sciences.length ? (
           <div className="science-grid">
             {sciences.map(s => {

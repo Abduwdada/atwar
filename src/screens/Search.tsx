@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { sp } from '../nav'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../data/store'
 import { tokenize } from '../engine/arabic'
@@ -36,13 +37,13 @@ export default function Search() {
       {rIssues.length > 0 && (
         <section className="stack tight">
           <div className="section-label">المسائل</div>
-          <div className="list">{rIssues.map(i => <Link key={i.id} className="item" to={`/issues/${i.id}`}><div className="grow"><div className="title">{i.name}</div>{i.section && <div className="meta">{i.section}</div>}</div><Icon.ChevronIn /></Link>)}</div>
+          <div className="list">{rIssues.map(i => <Link key={i.id} className="item" to={sp(`/issues/${i.id}`)}><div className="grow"><div className="title">{i.name}</div>{i.section && <div className="meta">{i.section}</div>}</div><Icon.ChevronIn /></Link>)}</div>
         </section>
       )}
       {rBooks.length > 0 && (
         <section className="stack tight">
           <div className="section-label">الكتب</div>
-          <div className="list">{rBooks.map(b => <Link key={b.id} className="item" to={`/books/${b.id}`}><div className="grow"><div className="title">{b.title}</div><div className="meta">{b.author} · {yr(b)}</div></div><Icon.ChevronIn /></Link>)}</div>
+          <div className="list">{rBooks.map(b => <Link key={b.id} className="item" to={sp(`/books/${b.id}`)}><div className="grow"><div className="title">{b.title}</div><div className="meta">{b.author} · {yr(b)}</div></div><Icon.ChevronIn /></Link>)}</div>
         </section>
       )}
       {rPassages.length > 0 && (
@@ -50,7 +51,7 @@ export default function Search() {
           <div className="section-label">النصوص، مرتبة زمنياً</div>
           <div className="list">
             {rPassages.map(a => (
-              <Link key={a.passage.id} className="item" to={`/issues/${a.passage.issueId}#${a.passage.id}`} style={{ alignItems: 'flex-start' }}>
+              <Link key={a.passage.id} className="item" to={sp(`/issues/${a.passage.issueId}#${a.passage.id}`)} style={{ alignItems: 'flex-start' }}>
                 <div className="grow">
                   <div className="title">{a.book.title} <span className="small muted">{yr(a.book)} · {issueById.get(a.passage.issueId)?.name}</span></div>
                   <div style={{ fontFamily: 'var(--f-text)', fontSize: 18, lineHeight: 1.9 }}>{a.passage.body}</div>

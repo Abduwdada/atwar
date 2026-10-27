@@ -1,6 +1,7 @@
 export interface Science {
   id: string
   name: string
+  description?: string
   createdAt: number
 }
 
@@ -24,6 +25,7 @@ export interface Issue {
   scienceId: string
   name: string
   section?: string // الباب الذي تندرج تحته المسألة
+  order?: number // ترتيب يحدده المؤلف، وإلا فبحسب وقت الإضافة
   sample?: boolean
   createdAt: number
 }
