@@ -54,6 +54,8 @@ export function Matrix() {
   )
 }
 
+const ORD = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر', 'الحادي عشر', 'الثاني عشر', 'الثالث عشر', 'الرابع عشر', 'الخامس عشر']
+
 export function Tree() {
   const { books, links, analysis, passages } = useStore()
   const [sel, setSel] = useState<string>('')
@@ -66,59 +68,60 @@ export function Tree() {
 
   if (!books.length) return <><PageHead title="شجرة الكتب" /><div className="empty card">أضف كتباً ونصوصاً لتظهر الشجرة.</div></>
 
-  // ترتيب الصفوف بحيث يأتي كل كتاب تحت أصله
+  // الزمن يتنزّل من الأعلى: لكل كتاب صف بحسب سنة وفاته، فلا تتداخل الأسماء
+  const row = new Map(books.map((b, i) => [b.id, i]))
+  // والأعمدة كترتيب الشجرة: الفروع متجاورة، والأصل في وسط فروعه
   const kids = new Map(books.map(b => [b.id, [] as string[]]))
   books.forEach(b => { const p = analysis.parent.get(b.id); if (p) kids.get(p.from)?.push(b.id) })
-  const order: string[] = []
-  const visit = (id: string) => { order.push(id); kids.get(id)!.forEach(visit) }
-  books.filter(b => !analysis.parent.has(b.id)).forEach(b => visit(b.id))
-
-  const minY = Math.floor(books[0].death / 100) * 100
-  const maxY = Math.ceil((books.at(-1)!.death + 1) / 100) * 100
-  // فجوة القرون الخالية من الكتب تُطوى حتى لا يتسع الرسم بلا فائدة
-  const centuries: number[] = []
-  for (let c = minY; c < maxY; c += 100) if (books.some(b => b.death >= c && b.death < c + 100)) centuries.push(c)
-  const W = 980, padL = 160, padR = 48, top = 64, rowH = 54
-  const H = top + order.length * rowH + 16
-  const span = (W - padL - padR) / centuries.length
-  const X = (y: number) => {
-    const c = Math.floor(y / 100) * 100
-    const i = centuries.indexOf(c)
-    return W - padR - (i + (y - c) / 100) * span
+  const col = new Map<string, number>()
+  let slot = 0
+  const place = (id: string): number => {
+    const ks = kids.get(id)!
+    if (!ks.length) { col.set(id, slot); return slot++ }
+    const xs = ks.map(place)
+    const x = (Math.min(...xs) + Math.max(...xs)) / 2
+    col.set(id, x)
+    return x
   }
-  const pos = new Map(order.map((id, i) => [id, { x: X(books.find(b => b.id === id)!.death), y: top + i * rowH + rowH / 2 }]))
+  books.filter(b => !analysis.parent.has(b.id)).forEach(b => place(b.id))
+
+  const colW = 150, rowH = 64, padR = 110, padL = 180, top = 24
+  const W = padR + Math.max(slot - 1, 0) * colW + padL
+  const H = top + books.length * rowH + 8
+  const pos = new Map(books.map(b => [b.id, { x: W - padR - col.get(b.id)! * colW, y: top + row.get(b.id)! * rowH + rowH / 2 }]))
   const curve = (a: { x: number; y: number }, b: { x: number; y: number }, bend: number) => {
-    const x1 = a.x - 11, x2 = b.x + 11, dx = Math.max(30, (x1 - x2) / 2)
-    return `M${x1},${a.y} C${x1 - dx},${a.y + bend} ${x2 + dx},${b.y + bend} ${x2},${b.y}`
+    const y1 = a.y + 11, y2 = b.y - 11, dy = Math.max(24, (y2 - y1) / 2)
+    return `M${a.x},${y1} C${a.x + bend},${y1 + dy} ${b.x + bend},${y2 - dy} ${b.x},${y2}`
   }
   const title = (id: string) => books.find(b => b.id === id)?.title ?? ''
+  const century = (d: number) => Math.floor(d / 100)
 
   return (
     <>
-      <PageHead title="شجرة الكتب" sub="الزمن من اليمين إلى اليسار" />
+      <PageHead title="شجرة الكتب" sub="الأقدم في الأعلى، وكل كتاب تحت أصله" />
       <div className="legend">
         <label className="check"><input id="tg-inf" type="checkbox" checked={showInf} onChange={e => setShowInf(e.target.checked)} /><span className="swl" />مستنتجة من النصوص</label>
         <label className="check"><input id="tg-dec" type="checkbox" checked={showDec} onChange={e => setShowDec(e.target.checked)} /><span className="swl dash" />معلنة</label>
         {schools.map(s => <span key={s}><i className="sw-dot" style={{ background: colorOf(s) }} />{s}</span>)}
       </div>
       <div className="svgwrap">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="شجرة الكتب على خط زمني">
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ minWidth: Math.min(W, 1100) }} role="img" aria-label="شجرة الكتب، الأقدم في الأعلى">
           <defs>
             <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)" /></marker>
             <marker id="arG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--gold)" /></marker>
           </defs>
-          {centuries.map((c, i) => {
-            const x = W - padR - i * span
-            const gap = i > 0 && centuries[i - 1] !== c - 100
+          {books.map((b, i) => {
+            if (i > 0 && century(books[i - 1].death) === century(b.death)) return null
+            const y = top + i * rowH
             return (
-              <g key={c}>
-                <line x1={x} y1={top - 14} x2={x} y2={H - 8} stroke="var(--line)" strokeDasharray={gap ? '2 4' : undefined} />
-                <text x={x - 6} y={top - 24} textAnchor="start" fontSize="12" fill="var(--muted)" fontFamily="var(--f-ui)" direction="rtl">{gap ? '… ' : ''}{ar(c)}هـ</text>
+              <g key={'c' + b.id}>
+                {i > 0 && <line x1={8} y1={y} x2={W - 8} y2={y} stroke="var(--line)" />}
+                <text x={W - 12} y={y + 22} textAnchor="end" fontSize="12.5" fontWeight="600" fill="var(--muted)" fontFamily="var(--f-ui)">القرن {ORD[century(b.death)] ?? ar(century(b.death) + 1)}</text>
               </g>
             )
           })}
           {showDec && links.map(l => pos.has(l.from) && pos.has(l.to) && (
-            <path key={l.id} d={curve(pos.get(l.from)!, pos.get(l.to)!, 10)} fill="none" stroke="var(--gold)" strokeWidth="1.6" strokeDasharray="5 4" markerEnd="url(#arG)">
+            <path key={l.id} d={curve(pos.get(l.from)!, pos.get(l.to)!, 16)} fill="none" stroke="var(--gold)" strokeWidth="1.6" strokeDasharray="5 4" markerEnd="url(#arG)">
               <title>{`${title(l.from)} ← ${title(l.to)}${l.note ? ': ' + l.note : ''}`}</title>
             </path>
           ))}
@@ -131,16 +134,15 @@ export function Tree() {
               </path>
             )
           })}
-          {order.map(id => {
-            const b = books.find(x => x.id === id)!
-            const p = pos.get(id)!
-            const has = withTexts.has(id)
+          {books.map(b => {
+            const p = pos.get(b.id)!
+            const has = withTexts.has(b.id)
             return (
-              <g key={id} className={'node' + (sel === id ? ' sel' : '')} tabIndex={0} role="button" aria-label={b.title}
-                onClick={() => setSel(id)} onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSel(id)}>
-                <circle cx={p.x} cy={p.y} r="8" fill={has ? colorOf(b.school) : 'var(--surface)'} style={has ? undefined : { stroke: colorOf(b.school), strokeDasharray: '3 2' }} />
-                <text x={p.x - 14} y={p.y + 1} textAnchor="end" fontFamily="var(--f-text)" fontSize="17" fontWeight="700" fill="var(--ink)">{b.title}</text>
-                <text x={p.x - 14} y={p.y + 18} textAnchor="end" fontFamily="var(--f-ui)" fontSize="11.5" fill="var(--muted)">{`${b.author} · ${ar(b.death)}هـ`}</text>
+              <g key={b.id} className={'node' + (sel === b.id ? ' sel' : '')} tabIndex={0} role="button" aria-label={b.title}
+                onClick={() => setSel(b.id)} onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSel(b.id)}>
+                <circle cx={p.x} cy={p.y} r="9" fill={has ? colorOf(b.school) : 'var(--surface)'} style={has ? undefined : { stroke: colorOf(b.school), strokeDasharray: '3 2' }} />
+                <text x={p.x - 16} y={p.y + 1} textAnchor="end" fontFamily="var(--f-text)" fontSize="17" fontWeight="700" fill="var(--ink)">{b.title}</text>
+                <text x={p.x - 16} y={p.y + 18} textAnchor="end" fontFamily="var(--f-ui)" fontSize="11.5" fill="var(--muted)">{`${b.author} · ${ar(b.death)}هـ`}</text>
               </g>
             )
           })}
