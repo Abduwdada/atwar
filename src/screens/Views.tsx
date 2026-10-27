@@ -356,6 +356,7 @@ export function Tree() {
         <label className="check"><input id="tg-inf" type="checkbox" checked={o.inf} onChange={e => set('inf', e.target.checked)} /><span className="swl" />مستنتجة من النصوص</label>
         <label className="check"><input id="tg-dec" type="checkbox" checked={o.dec} onChange={e => set('dec', e.target.checked)} /><span className="swl dash" />معلنة</label>
         {schools.map(s => <span key={s}><i className="sw-dot" style={{ background: colorOf(s) }} />{s}</span>)}
+        <span><i className="sw-dot hollow-dot" />كتاب لم تُضف نصوصه بعد</span>
       </div>
       <p className="small muted" style={{ margin: 0 }}>
         {bending ? 'اسحب النقطة في وسط أي سهم لثنيه، واضغطها مرتين لإرجاعه مستقيماً.' : 'اسحب أي كتاب لتحريكه داخل قرنه، واسحب الفراغ لتحريك الرسم.'}

@@ -8,6 +8,7 @@ import { splitLead } from '../engine/arabic'
 import { Badge, DiffText, pct, yr } from '../ui/bits'
 import { BookForm, IssueForm } from '../ui/forms'
 import * as Icon from '../ui/icons'
+import ImageToText from '../ui/ImageToText'
 
 type Step = 'text' | 'book' | 'issue' | 'place' | 'done'
 const ORDER: Step[] = ['text', 'book', 'issue', 'place']
@@ -97,6 +98,7 @@ export default function Add() {
       {step === 'text' && (
         <div className="stack">
           <h2 className="step-title">الصق النص أو اكتبه</h2>
+          <ImageToText onText={t => { setRaw(r => (r.trim() ? r.trim() + ' ' + t : t)); setError('') }} />
           <textarea id="add-text" className="textarea" value={raw} onChange={e => { setRaw(e.target.value); setError('') }} placeholder="الصق نص المسألة أو التعريف كما ورد في الكتاب" autoFocus />
           <label className="field"><span>اللفظ المعرَّف (لا يدخل في المقارنة)</span>
             <input id="add-lead" className="input" value={effLead} onChange={e => { setLead(e.target.value); setLeadTouched(true) }} placeholder="يُستخرج تلقائياً إن جاء قبل نقطتين" />

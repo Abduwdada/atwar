@@ -34,6 +34,11 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         // آخر نسخة منشورة تبقى متاحة للزائر بلا إنترنت
         runtimeCaching: [{
+          // أداة قراءة الصور وملف العربية: تُنزّل أول مرة ثم تعمل بلا إنترنت
+          urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/(tesseract\.js|tesseract\.js-core|@tesseract\.js-data)/,
+          handler: 'CacheFirst',
+          options: { cacheName: 'atwar-ocr', expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 } },
+        }, {
           urlPattern: /^https:\/\/raw\.githubusercontent\.com\/Abduwdada\/atwar-data\//,
           handler: 'NetworkFirst',
           options: { cacheName: 'atwar-data', networkTimeoutSeconds: 6 },
