@@ -33,14 +33,14 @@ export default function Home() {
     <>
       <section className="hero">
         <div className="hero-top">
-          <span className="eyebrow">أطوار · رصد تطور العلوم</span>
+          <Link to="/" className="eyebrow" style={{ textDecoration: 'none' }}>أطوار · العلوم المرصودة</Link>
           {sciences.length > 1 && (
             <select id="home-science" className="select" style={{ width: 'auto', minHeight: 38 }} value={science?.id} onChange={e => setScienceId(e.target.value)} aria-label="العلم">
               {sciences.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           )}
         </div>
-        <h1>{science?.name ?? 'أطوار'}</h1>
+        <h1>{science?.name}</h1>
         <p className="lede">
           تتبّع نضج المسائل والمصطلحات عبر الكتب بترتيبها الزمني، وما نقله كل مصنف عمن قبله وما زاد عليه أو استدركه.
           {first && last && first !== last && <> من <b className="num">{ar(first.death)}هـ</b> إلى <b className="num">{ar(last.death)}هـ</b>.</>}

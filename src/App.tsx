@@ -10,6 +10,7 @@ import PassageEdit from './screens/PassageEdit'
 import { Compare, Matrix, Tree } from './screens/Views'
 import More from './screens/More'
 import Search from './screens/Search'
+import Landing from './screens/Landing'
 
 // صفحات النماذج تبقى بعرض القراءة، وصفحات الاستعراض تتسع على الشاشة الكبيرة
 const NARROW = ['/add', '/more', '/passages']
@@ -30,16 +31,18 @@ function Shell() {
   const { ready, loadError, canEdit, dirty, science } = useStore()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (!hash) window.scrollTo(0, 0) }, [pathname])
-  useEffect(() => { document.title = science ? `أطوار · ${science.name}` : 'أطوار' }, [science])
+  useEffect(() => { document.title = science && pathname !== '/' ? `أطوار · ${science.name}` : 'أطوار' }, [science, pathname])
   const narrow = NARROW.some(p => pathname.startsWith(p))
 
   return (
     <div className="shell">
       <nav className="sidebar" aria-label="الأقسام">
-        <div className="brand">أطوار<small>رصد تطور العلوم عبر نصوصها</small></div>
+        <NavLink to="/" end className="brand">أطوار<small>رصد تطور العلوم عبر نصوصها</small></NavLink>
         <SideSearch />
         {canEdit && <NavLink className="btn primary" to="/add"><Icon.Plus />إضافة نص</NavLink>}
-        <NavLink to="/" end><Icon.Home />{science?.name ?? 'الرئيسية'}</NavLink>
+        <NavLink to="/" end><Icon.Home />العلوم</NavLink>
+        <div className="side-group">{science?.name}</div>
+        <NavLink to="/science"><Icon.Overview />نظرة عامة</NavLink>
         <NavLink to="/issues"><Icon.Issues />المسائل</NavLink>
         <NavLink to="/books"><Icon.Books />الكتب</NavLink>
         <NavLink to="/matrix"><Icon.Grid />المصفوفة</NavLink>
@@ -54,7 +57,8 @@ function Shell() {
           <div className="empty card">{loadError} تأكد من الاتصال بالإنترنت ثم أعد فتح الصفحة.</div>
         ) : ready ? (
           <Routes>
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={<Landing />} />
+            <Route path="/science" element={<Home />} />
             {/* مفتاح البحث يعيد بناء شاشة الإضافة عند الانتقال من نص إلى آخر */}
             <Route path="/add" element={canEdit ? <Add key={search + key} /> : <Navigate to="/more" replace />} />
             <Route path="/issues" element={<IssueList />} />
@@ -67,13 +71,13 @@ function Shell() {
             <Route path="/compare" element={<Compare />} />
             <Route path="/search" element={<Search key={search} />} />
             <Route path="/more" element={<More />} />
-            <Route path="*" element={<Home />} />
+            <Route path="*" element={<Landing />} />
           </Routes>
         ) : <div className="empty">جارٍ التحميل…</div>}
       </main>
 
       <nav className="tabbar" aria-label="الأقسام">
-        <NavLink to="/" end><Icon.Home /><span>الرئيسية</span></NavLink>
+        <NavLink to="/" end><Icon.Home /><span>العلوم</span></NavLink>
         <NavLink to="/issues"><Icon.Issues /><span>المسائل</span></NavLink>
         {canEdit
           ? <NavLink to="/add" className="add" aria-label="إضافة نص"><span className="plus"><Icon.Plus /></span></NavLink>

@@ -96,9 +96,9 @@ export default function Add() {
       {step === 'text' && (
         <div className="stack">
           <h2 className="step-title">الصق النص أو اكتبه</h2>
-          <textarea id="add-text" className="textarea" value={raw} onChange={e => { setRaw(e.target.value); setError('') }} placeholder="الواجب: ما يذم شرعاً تاركه قصداً مطلقاً" autoFocus />
+          <textarea id="add-text" className="textarea" value={raw} onChange={e => { setRaw(e.target.value); setError('') }} placeholder="الصق نص المسألة أو التعريف كما ورد في الكتاب" autoFocus />
           <label className="field"><span>اللفظ المعرَّف (لا يدخل في المقارنة)</span>
-            <input id="add-lead" className="input" value={effLead} onChange={e => { setLead(e.target.value); setLeadTouched(true) }} placeholder="الواجب:" />
+            <input id="add-lead" className="input" value={effLead} onChange={e => { setLead(e.target.value); setLeadTouched(true) }} placeholder="يُستخرج تلقائياً إن جاء قبل نقطتين" />
           </label>
           {error && <p className="warn" role="alert">{error}</p>}
           <div className="sticky-foot">
@@ -136,7 +136,7 @@ export default function Add() {
             <label className="field"><span>الجزء</span><input id="add-vol" className="input num" inputMode="numeric" value={volume} onChange={e => setVolume(e.target.value)} placeholder="١" /></label>
             <label className="field"><span>الصفحة</span><input id="add-page" className="input num" inputMode="numeric" value={page} onChange={e => setPage(e.target.value)} placeholder="٩٧" /></label>
           </div>
-          <label className="field"><span>الطبعة أو التحقيق</span><input id="add-ed" className="input" value={edition} onChange={e => setEdition(e.target.value)} placeholder="تحقيق طه جابر العلواني، مؤسسة الرسالة" /></label>
+          <label className="field"><span>الطبعة أو التحقيق</span><input id="add-ed" className="input" value={edition} onChange={e => setEdition(e.target.value)} placeholder="المحقق والناشر وسنة الطبع" /></label>
           <label className="field"><span>ملاحظة</span><input id="add-note" className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="اختياري" /></label>
           {duplicate && <p className="warn">في هذه المسألة نص محفوظ من الكتاب نفسه. يُحفظ هذا نصاً ثانياً بجانبه.</p>}
           {error && <p className="warn" role="alert">{error}</p>}

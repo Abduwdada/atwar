@@ -10,7 +10,7 @@ import { IssueForm } from '../ui/forms'
 import * as Icon from '../ui/icons'
 
 export function IssueList() {
-  const { issues, passages, canEdit } = useStore()
+  const { issues, passages, canEdit, science } = useStore()
   const [q, setQ] = useState('')
   const [adding, setAdding] = useState(false)
   const nav = useNavigate()
@@ -29,7 +29,7 @@ export function IssueList() {
 
   return (
     <>
-      <PageHead title="المسائل" sub={count(issues.length, 'مسألة', 'مسألتان', 'مسائل', 'مسألة')}
+      <PageHead title="المسائل والمصطلحات" sub={`${science?.name ?? ''} · ${count(issues.length, 'مسألة', 'مسألتان', 'مسائل', 'مسألة')}`}
         action={canEdit && <button className="btn sm" onClick={() => setAdding(a => !a)}><Icon.Plus />مسألة</button>} />
       {adding && <IssueForm onSaved={i => nav(`/issues/${i.id}`)} onCancel={() => setAdding(false)} />}
       <div className="search"><Icon.Search /><input id="issues-q" className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث في المسائل" /></div>

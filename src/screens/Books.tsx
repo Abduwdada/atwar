@@ -7,7 +7,7 @@ import { BookForm } from '../ui/forms'
 import * as Icon from '../ui/icons'
 
 export function BookList() {
-  const { books, passages, canEdit } = useStore()
+  const { books, passages, canEdit, science } = useStore()
   const [q, setQ] = useState('')
   const [adding, setAdding] = useState(false)
   const nav = useNavigate()
@@ -21,7 +21,7 @@ export function BookList() {
 
   return (
     <>
-      <PageHead title="الكتب" sub={`${count(books.length, 'كتاب', 'كتابان', 'كتب', 'كتاباً')}، مرتبة بسنة الوفاة`}
+      <PageHead title="الكتب" sub={`${science?.name ?? ''} · ${count(books.length, 'كتاب', 'كتابان', 'كتب', 'كتاباً')}، مرتبة بسنة الوفاة`}
         action={canEdit && <button className="btn sm" onClick={() => setAdding(a => !a)}><Icon.Plus />كتاب</button>} />
       {adding && <BookForm onSaved={b => nav(`/books/${b.id}`)} onCancel={() => setAdding(false)} />}
       <div className="search"><Icon.Search /><input id="books-q" className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث بالعنوان أو المؤلف" /></div>
@@ -181,7 +181,7 @@ function LinkForm({ bookId, scienceId, onDone }: { bookId: string; scienceId: st
           </select>
         </label>
       </div>
-      <label className="field"><span>المستند</span><input id="lf-note" className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="الحاصل اختصار للمحصول" /></label>
+      <label className="field"><span>المستند</span><input id="lf-note" className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="مثل: شرحٌ عليه، أو اختصارٌ له، أو نصّ المؤلف في مقدمته" /></label>
       {error && <p className="warn" role="alert" style={{ margin: 0 }}>{error}</p>}
       <div className="row"><button className="btn primary" type="submit">إضافة الصلة</button><button className="btn" type="button" onClick={onDone}>إلغاء</button></div>
     </form>

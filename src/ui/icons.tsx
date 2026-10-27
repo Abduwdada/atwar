@@ -23,3 +23,4 @@ export const Check = () => <I><path d="M5 12l5 5 9-10" /></I>
 export const Download = () => <I><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></I>
 export const Upload = () => <I><path d="M12 15V4M7 9l5-5 5 5M5 20h14" /></I>
 export const X = () => <I><path d="M6 6l12 12M18 6L6 18" /></I>
+export const Overview = () => <I><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="4" rx="1.5" /><rect x="13" y="10" width="7" height="10" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /></I>

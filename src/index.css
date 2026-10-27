@@ -335,3 +335,23 @@ table.matrix { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 .tabbar a { position: relative; }
 .tabbar .dot { position: absolute; top: 8px; left: calc(50% - 16px); margin: 0; }
 .sw-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-left: 6px; vertical-align: middle; }
+
+/* الواجهة العامة للمنصة */
+.sidebar a.brand { display: block; padding: 0; background: none; color: var(--ink); }
+.sidebar a.brand:hover, .sidebar a.brand.active { background: none; color: var(--ink); }
+.side-group { margin: 14px 12px 4px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.science-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.science-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px; text-align: right;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; cursor: pointer;
+}
+.science-card:hover { border-color: var(--accent); }
+.science-name { font-family: var(--f-brand); font-size: 28px; font-weight: 700; line-height: 1.2; }
+.span-line { display: flex; align-items: center; gap: 8px; width: 100%; font-size: 13px; color: var(--muted); }
+.span-line i { flex: 1; height: 2px; background: linear-gradient(to left, var(--accent), var(--accent-soft)); border-radius: 1px; }
+.science-go { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-weight: 600; font-size: 14px; margin-top: 4px; }
+.science-go svg { width: 16px; height: 16px; }
+.how { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; counter-reset: how; }
+.how li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; counter-increment: how; }
+.how li::before { content: counter(how, arabic-indic); font-family: var(--f-brand); font-size: 22px; color: var(--accent); line-height: 1; }
+.how li span { color: var(--muted); font-size: 14.5px; }

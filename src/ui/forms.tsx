@@ -36,22 +36,22 @@ export function BookForm({ book, onSaved, onCancel }: { book?: Book; onSaved: (b
   return (
     <form className="card" onSubmit={submit} noValidate>
       <label className="field"><span>عنوان الكتاب</span>
-        <input id="bf-title" className="input" value={title} onChange={e => { setTitle(e.target.value); setError('') }} placeholder="المحصول في علم الأصول" autoFocus />
+        <input id="bf-title" className="input" value={title} onChange={e => { setTitle(e.target.value); setError('') }} placeholder="عنوان الكتاب كما اشتهر" autoFocus />
       </label>
       <label className="field"><span>المؤلف</span>
-        <input id="bf-author" className="input" value={author} onChange={e => { setAuthor(e.target.value); setError('') }} placeholder="فخر الدين الرازي" />
+        <input id="bf-author" className="input" value={author} onChange={e => { setAuthor(e.target.value); setError('') }} placeholder="اسم المؤلف" />
       </label>
       <div className="row">
         <label className="field"><span>سنة الوفاة (هـ)</span>
-          <input id="bf-death" className="input num" inputMode="numeric" value={death} onChange={e => { setDeath(e.target.value); setError('') }} placeholder="٦٠٦" />
+          <input id="bf-death" className="input num" inputMode="numeric" value={death} onChange={e => { setDeath(e.target.value); setError('') }} placeholder="مثل ٦٠٦" />
         </label>
         <label className="field"><span>ملاحظة على السنة</span>
-          <input id="bf-dnote" className="input" value={deathNote} onChange={e => setDeathNote(e.target.value)} placeholder="وقيل ٦٠٤هـ" />
+          <input id="bf-dnote" className="input" value={deathNote} onChange={e => setDeathNote(e.target.value)} placeholder="مثل: وقيل ٦٠٤هـ" />
         </label>
       </div>
       <div className="row">
-        <label className="field"><span>المذهب</span>
-          <input id="bf-school" className="input" list="bf-schools" value={school} onChange={e => setSchool(e.target.value)} placeholder="شافعي" />
+        <label className="field"><span>المذهب أو المدرسة</span>
+          <input id="bf-school" className="input" list="bf-schools" value={school} onChange={e => setSchool(e.target.value)} placeholder="اختياري" />
           <datalist id="bf-schools">{schools.map(s => <option key={s} value={s} />)}</datalist>
         </label>
         <label className="field"><span>نوعه</span>
@@ -91,10 +91,10 @@ export function IssueForm({ issue, onSaved, onCancel, initialName = '' }: { issu
   return (
     <form className="card" onSubmit={submit} noValidate>
       <label className="field"><span>المسألة أو المصطلح</span>
-        <input id="if-name" className="input" value={name} onChange={e => { setName(e.target.value); setError('') }} placeholder="تعريف المندوب" autoFocus />
+        <input id="if-name" className="input" value={name} onChange={e => { setName(e.target.value); setError('') }} placeholder="مثل: تعريف المصطلح، أو مسألة بعينها" autoFocus />
       </label>
-      <label className="field"><span>الباب</span>
-        <input id="if-section" className="input" list="if-sections" value={section} onChange={e => setSection(e.target.value)} placeholder="الحكم التكليفي" />
+      <label className="field"><span>الباب أو الفصل</span>
+        <input id="if-section" className="input" list="if-sections" value={section} onChange={e => setSection(e.target.value)} placeholder="اختياري" />
         <datalist id="if-sections">{sections.map(s => <option key={s} value={s} />)}</datalist>
       </label>
       {error && <p className="warn" role="alert" style={{ margin: 0 }}>{error}</p>}

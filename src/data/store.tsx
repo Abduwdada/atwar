@@ -25,6 +25,8 @@ interface Store {
   issueById: Map<string, Issue>
   analysis: ScienceAnalysis
   hasSample: boolean
+  // ملخص كل علم للصفحة الرئيسية العامة
+  scienceStats: Map<string, ScienceStats>
   // النشر
   sync: SyncState | null
   dirty: boolean
@@ -34,6 +36,8 @@ interface Store {
   pull: () => Promise<void>
   publish: (message: string, force?: boolean) => Promise<void>
 }
+
+export interface ScienceStats { books: number; issues: number; passages: number; from?: number; to?: number; sample: boolean }
 
 const Ctx = createContext<Store | null>(null)
 const KEY = 'atwar.science'
@@ -83,6 +87,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const lIssues = useLiveQuery(async () => (owner ? await db.issues.where({ scienceId }).sortBy('createdAt') : undefined), [owner, scienceId])
   const lPassages = useLiveQuery(async () => (owner ? await db.passages.where({ scienceId }).toArray() : undefined), [owner, scienceId])
   const lLinks = useLiveQuery(async () => (owner ? await db.links.where({ scienceId }).toArray() : undefined), [owner, scienceId])
+  const allLocal = useLiveQuery(async () => (owner ? { books: await db.books.toArray(), issues: await db.issues.toArray(), passages: await db.passages.toArray() } : undefined), [owner])
   const localHash = useLiveQuery(async () => (owner ? datasetHash(await exportAll()) : undefined), [owner])
 
   const sciences = owner ? lSciences : remote?.sciences
@@ -149,14 +154,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       issueById: new Map(issues.map(x => [x.id, x])),
       analysis: analyseScience(passages, books),
       hasSample: passages.some(x => x.sample) || books.some(x => x.sample),
+      scienceStats: statsOf(owner ? allLocal : remote ?? undefined),
       sync,
       dirty: owner && !!localHash && localHash !== sync?.hash,
       localWorkHidden: !owner && localWorkHidden,
       login, logout, pull, publish,
     }
-  }, [owner, remote, loadError, sciences, scienceId, setScienceId, lSciences, lBooks, lIssues, lPassages, lLinks, localHash, sync, localWorkHidden, login, logout, pull, publish])
+  }, [owner, remote, loadError, sciences, scienceId, setScienceId, lSciences, lBooks, lIssues, lPassages, lLinks, allLocal, localHash, sync, localWorkHidden, login, logout, pull, publish])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
+}
+
+function statsOf(d: { books?: Book[]; issues?: Issue[]; passages?: Passage[] } | undefined) {
+  const m = new Map<string, ScienceStats>()
+  const get = (id: string) => m.get(id) ?? m.set(id, { books: 0, issues: 0, passages: 0, sample: false }).get(id)!
+  for (const b of d?.books ?? []) {
+    const s = get(b.scienceId)
+    s.books++
+    s.from = Math.min(s.from ?? b.death, b.death)
+    s.to = Math.max(s.to ?? b.death, b.death)
+  }
+  for (const i of d?.issues ?? []) get(i.scienceId).issues++
+  for (const p of d?.passages ?? []) {
+    const s = get(p.scienceId)
+    s.passages++
+    if (p.sample) s.sample = true
+  }
+  return m
 }
 
 export function useStore() {
