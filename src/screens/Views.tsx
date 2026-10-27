@@ -87,6 +87,8 @@ export function Tree() {
   const [o, set] = useListPrefs('tree', { view: 'v' as View, inf: true, dec: true })
   const [zoom, setZoom] = useState(1)
   const [bending, setBending] = useState(false)
+  const [full, setFull] = useState(false)
+  const [box, setBox] = useState({ w: 0, h: 0 })
   // ما يغيّره الزائر يبقى عنده مؤقتاً، وما يغيّره المؤلف يُحفظ مع العلم ويُنشر
   const [local, setLocal] = useState<Record<string, Pt>>({})
   const [localBends, setLocalBends] = useState<Record<string, Pt>>({})
@@ -163,16 +165,28 @@ export function Tree() {
   const maxY = V ? Math.max(...ys, ...bandT) + 6 : Math.max(...ys) + 56
   const W = maxX - minX, H = maxY - minY
 
-  // الملاءمة: يدخل الرسم كله في عرض الإطار وارتفاع الشاشة
-  const fit = () => {
-    const w = wrapRef.current?.clientWidth
-    if (!w) return
-    const h = Math.max(320, window.innerHeight * 0.68)
-    setZoom(Math.max(0.25, Math.min(1.3, (w - 4) / W, h / H)))
-  }
+  // حجم الإطار يتابَع دائماً، ليملأ الرسم عرضه وارتفاعه مهما كبّره المستخدم أو صغّره
   useEffect(() => {
-    const k = `${view}:${books.length}`
-    if (view !== 'list' && fitted.current !== k) { fitted.current = k; fit() }
+    const el = wrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => setBox({ w: e.contentRect.width, h: e.contentRect.height }))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [view, full, books.length])
+  useEffect(() => {
+    if (!full) return
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setFull(false) }
+    document.addEventListener('keydown', esc)
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = '' }
+  }, [full])
+  const clampZ = (z: number) => Math.max(0.25, Math.min(1.25, z))
+  const fitWidth = () => { const el = wrapRef.current; if (el) setZoom(clampZ((el.clientWidth - 4) / W)) }
+  const fitAll = () => { const el = wrapRef.current; if (el) setZoom(clampZ(Math.min((el.clientWidth - 4) / W, (el.clientHeight - 4) / H))) }
+  // أول عرض: العمودي يملأ العرض ويُمرَّر طولاً، والأفقي وملء الشاشة يُظهران الرسم كله
+  useEffect(() => {
+    const k = `${view}:${books.length}:${full}`
+    if (view !== 'list' && fitted.current !== k) { fitted.current = k; if (V && !full) fitWidth(); else fitAll() }
   })
   const step = (f: number) => setZoom(z => Math.max(0.25, Math.min(2.5, +(z * f).toFixed(2))))
 
@@ -317,16 +331,23 @@ export function Tree() {
     if (canEdit && science) await db.sciences.update(science.id, { [layoutKey]: undefined, [bendKey]: undefined })
   }
 
+  // الرسم يتسع ليملأ الإطار، والمحتوى في وسطه، فلا يبقى جزء من الإطار فارغاً بلا ظلال القرون
+  const viewW = Math.max(W, (box.w - 2) / zoom), viewH = Math.max(H, (box.h - 2) / zoom)
+  const vx = minX - (viewW - W) / 2
+
   return (
     <>
+      <div className={'tree-stage' + (full ? ' full' : '')}>
       <div className="controls">
         {viewSwitch}
         <span className="zoom-btns">
           <button className="icon-btn" onClick={() => step(1 / 1.2)} aria-label="تصغير"><Icon.Minus /></button>
           <span className="num small">{ar(Math.round(zoom * 100))}٪</span>
           <button className="icon-btn" onClick={() => step(1.2)} aria-label="تكبير"><Icon.Plus /></button>
-          <button className="btn sm" onClick={fit}>ملاءمة</button>
+          <button className="btn sm" onClick={fitWidth}>ملء العرض</button>
+          <button className="btn sm" onClick={fitAll}>إظهار الكل</button>
         </span>
+        <button className="btn sm" onClick={() => setFull(f => !f)}>{full ? 'إغلاق ملء الشاشة' : 'ملء الشاشة'}</button>
         <button className={'btn sm' + (bending ? ' primary' : '')} onClick={() => setBending(b => !b)}>{bending ? 'تم' : 'ثني الأسهم'}</button>
         <button className="btn sm" onClick={compact}>ضغط الفراغات</button>
         {customized && <button className="btn sm ghost" onClick={resetLayout}>الترتيب التلقائي</button>}
@@ -341,7 +362,7 @@ export function Tree() {
         {canEdit ? ' ما ترتبه يُحفظ ويُنشر للزوار.' : ''}
       </p>
       <div className={'svgwrap tree-wrap' + (drag?.kind === 'pan' ? ' panning' : '')} ref={wrapRef}>
-        <svg ref={svgRef} viewBox={`${minX} ${minY} ${W} ${H}`} style={{ width: W * zoom, minWidth: 0, height: H * zoom }}
+        <svg ref={svgRef} viewBox={`${vx} ${minY} ${viewW} ${viewH}`} style={{ width: viewW * zoom, minWidth: 0, height: viewH * zoom }}
           role="img" aria-label={V ? 'شجرة الكتب، الأقدم في الأعلى' : 'شجرة الكتب، الأقدم على اليمين'}
           onPointerDown={startPan} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => setDrag(null)}>
           <defs>
@@ -350,12 +371,12 @@ export function Tree() {
           </defs>
           {bands.map(({ c, a, b }, i) => V ? (
             <g key={c}>
-              {i % 2 === 1 && <rect x={minX} y={a} width={W} height={b - a} fill="var(--sunken)" opacity="0.6" />}
-              <text x={maxX - 12} y={a + 20} textAnchor="end" fontSize="12.5" fontWeight="600" fill="var(--muted)" fontFamily="var(--f-ui)">{centuryLabel(c)}</text>
+              {i % 2 === 1 && <rect x={vx} y={a} width={viewW} height={b - a} fill="var(--sunken)" opacity="0.6" />}
+              <text x={vx + viewW - 12} y={a + 20} textAnchor="end" fontSize="12.5" fontWeight="600" fill="var(--muted)" fontFamily="var(--f-ui)">{centuryLabel(c)}</text>
             </g>
           ) : (
             <g key={c}>
-              {i % 2 === 1 && <rect x={-b} y={minY} width={b - a} height={H} fill="var(--sunken)" opacity="0.6" />}
+              {i % 2 === 1 && <rect x={-b} y={minY} width={b - a} height={viewH} fill="var(--sunken)" opacity="0.6" />}
               <text x={-a - 8} y={minY + 22} textAnchor="end" fontSize="12.5" fontWeight="600" fill="var(--muted)" fontFamily="var(--f-ui)">{centuryLabel(c)}</text>
             </g>
           ))}
@@ -400,6 +421,7 @@ export function Tree() {
             )
           })}
         </svg>
+      </div>
       </div>
       <SelectedBook sel={sel} title={title} />
     </>

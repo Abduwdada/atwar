@@ -474,7 +474,11 @@ select.select { padding-right: 14px; line-height: 1.4; }
 .main { width: 100%; }
 .main, .science, .science > * { min-width: 0; }
 .svgwrap { max-width: 100%; }
-.tree-wrap { max-height: 78vh; overflow: auto; cursor: grab; }
+.tree-wrap { height: 70vh; min-height: 300px; overflow: auto; cursor: grab; resize: vertical; }
+@media (max-width: 600px) { .tree-wrap { height: 62vh; } }
+.tree-stage { display: flex; flex-direction: column; gap: 12px; }
+.tree-stage.full { position: fixed; inset: 0; z-index: 60; background: var(--paper); padding: calc(12px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+.tree-stage.full .tree-wrap { flex: 1; height: auto; min-height: 0; resize: none; }
 .tree-wrap.panning { cursor: grabbing; user-select: none; }
 .tree-wrap svg { display: block; }
 .bend-handle { cursor: move; touch-action: none; }
