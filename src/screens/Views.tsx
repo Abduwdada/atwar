@@ -212,7 +212,7 @@ export function Tree() {
     if (!d?.moved) return setSel(id)
     if (canEdit && science) {
       await db.sciences.update(science.id, { [V ? 'treeLayout' : 'treeLayoutH']: { ...saved, [id]: local[id] } })
-      setLocal(l => { const { [id]: _, ...rest } = l; return rest })
+      setLocal(l => { const rest = { ...l }; delete rest[id]; return rest })
     }
   }
   async function resetLayout() {
