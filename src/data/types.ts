@@ -2,10 +2,20 @@ import type { Thresholds } from '../engine/compare'
 
 export type ListKey = 'schools' | 'kinds' | 'sections'
 
+// مجموعة علوم، مثل علوم الآلة وعلوم الغاية
+export interface ScienceGroup {
+  id: string
+  name: string
+  order: number
+  createdAt: number
+}
+
 export interface Science {
   id: string
   name: string
   description?: string
+  groupId?: string
+  order?: number // ترتيبه في القوائم، وإلا فبحسب وقت الإضافة
   // مواضع الكتب في الشجرة كما رتبها المؤلف بالسحب، لكل طريقة عرض على حدة
   treeLayout?: Record<string, { x: number; y: number }> // العمودي (الصيغة الأولى)
   treeLayoutH?: Record<string, { x: number; y: number }> // الأفقي

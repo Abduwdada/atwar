@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom'
 import { sp } from '../nav'
 import { useStore } from '../data/store'
 import { RELATIONS } from '../engine/compare'
-import { Badge, ar, count, yr } from '../ui/bits'
+import { ar, count, yr } from '../ui/bits'
 
 export default function Home() {
-  const { books, issues, passages, analysis, bookById, issueById, hasSample, canEdit } = useStore()
+  const { books, issues, passages, analysis, bookById, hasSample } = useStore()
 
   // المسائل الأكثر تطوراً: أكثرها نصوصاً، ثم أكثرها تنوعاً في العلاقات
   const topIssues = useMemo(() => issues.map(i => {
@@ -23,7 +23,6 @@ export default function Home() {
       .filter(x => x.book)
   }, [analysis, bookById])
 
-  const recent = [...passages].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5)
 
   return (
     <>
@@ -69,22 +68,6 @@ export default function Home() {
         </section>
       </div>
 
-      {recent.length > 0 && (
-        <section className="stack tight">
-          <div className="section-head"><h2>{canEdit ? 'آخر ما أضفت' : 'آخر ما نُشر'}</h2></div>
-          <div className="list">
-            {recent.map(p => {
-              const a = analysis.passages.get(p.id)
-              return (
-                <Link key={p.id} className="item" to={sp(`/issues/${p.issueId}#${p.id}`)}>
-                  <div className="grow"><div className="title">{issueById.get(p.issueId)?.name}</div><div className="meta">{bookById.get(p.bookId)?.title}</div></div>
-                  {a && <Badge relation={a.relation} manual={a.manual} />}
-                </Link>
-              )
-            })}
-          </div>
-        </section>
-      )}
     </>
   )
 }

@@ -10,20 +10,22 @@ import { BookForm, IssueForm } from '../ui/forms'
 import * as Icon from '../ui/icons'
 import ImageToText from '../ui/ImageToText'
 
-type Step = 'text' | 'book' | 'issue' | 'place' | 'done'
-const ORDER: Step[] = ['text', 'book', 'issue', 'place']
+// الكتاب أولاً، ثم المسألة، ثم النص، فيُكتب النص وقد عُرف موضعه من العلم
+type Step = 'book' | 'issue' | 'text' | 'place' | 'done'
+const ORDER: Step[] = ['book', 'issue', 'text', 'place']
 
 export default function Add() {
   const [params] = useSearchParams()
   const nav = useNavigate()
   const { science, books, issues, bookById, issueById, analysis, passages } = useStore()
 
-  const [step, setStep] = useState<Step>('text')
+  const [bookId, setBookId] = useState(params.get('book') ?? '')
+  const [issueId, setIssueId] = useState(params.get('issue') ?? '')
+  const [step, setStep] = useState<Step>(() => !bookById.has(params.get('book') ?? '') ? 'book' : !issueById.has(params.get('issue') ?? '') ? 'issue' : 'text')
   const [raw, setRaw] = useState('')
   const [lead, setLead] = useState('')
   const [leadTouched, setLeadTouched] = useState(false)
-  const [bookId, setBookId] = useState(params.get('book') ?? '')
-  const [issueId, setIssueId] = useState(params.get('issue') ?? '')
+  const [leadOpen, setLeadOpen] = useState(false)
   const [volume, setVolume] = useState('')
   const [page, setPage] = useState('')
   const [edition, setEdition] = useState('')
@@ -47,7 +49,7 @@ export default function Add() {
       if (s === 'issue' && issueById.has(issueId)) continue
       return setStep(s)
     }
-    setStep('place')
+    setStep(from === 'text' ? 'place' : 'text')
   }
 
   async function save() {
@@ -74,21 +76,23 @@ export default function Add() {
       </div>
       <div className="steps" aria-hidden="true">{ORDER.map((s, i) => <i key={s} className={i <= stepNo ? 'on' : ''} />)}</div>
 
-      {step !== 'text' && step !== 'done' && (
+      {step !== 'done' && (book || issue || (step === 'place' && body)) && (
         <div className="list">
-          <button className="item" onClick={() => setStep('text')}>
-            <div className="grow"><div className="meta">النص</div><div className="title" style={{ fontFamily: 'var(--f-text)', fontWeight: 400, fontSize: 18 }}>{body.split(/\s+/).slice(0, 8).join(' ')}…</div></div>
-            <span className="end">تغيير</span>
-          </button>
           {book && step !== 'book' && (
             <button className="item" onClick={() => setStep('book')}>
               <div className="grow"><div className="meta">الكتاب</div><div className="title">{book.title} <span className="muted small">{yr(book)}</span></div></div>
               <span className="end">تغيير</span>
             </button>
           )}
-          {issue && step !== 'issue' && (
+          {issue && step !== 'issue' && step !== 'book' && (
             <button className="item" onClick={() => setStep('issue')}>
-              <div className="grow"><div className="meta">المسألة</div><div className="title">{issue.name}</div></div>
+              <div className="grow"><div className="meta">المسألة{issue.section ? ` · ${issue.section}` : ''}</div><div className="title">{issue.name}</div></div>
+              <span className="end">تغيير</span>
+            </button>
+          )}
+          {step === 'place' && body && (
+            <button className="item" onClick={() => setStep('text')}>
+              <div className="grow"><div className="meta">النص</div><div className="title" style={{ fontFamily: 'var(--f-text)', fontWeight: 400, fontSize: 18 }}>{body.split(/\s+/).slice(0, 8).join(' ')}…</div></div>
               <span className="end">تغيير</span>
             </button>
           )}
@@ -97,12 +101,18 @@ export default function Add() {
 
       {step === 'text' && (
         <div className="stack">
-          <h2 className="step-title">الصق النص أو اكتبه</h2>
+          <h2 className="step-title">نص الكتاب في هذه المسألة</h2>
           <ImageToText onText={t => { setRaw(r => (r.trim() ? r.trim() + ' ' + t : t)); setError('') }} />
           <textarea id="add-text" className="textarea" value={raw} onChange={e => { setRaw(e.target.value); setError('') }} placeholder="الصق نص المسألة أو التعريف كما ورد في الكتاب" autoFocus />
-          <label className="field"><span>اللفظ المعرَّف (لا يدخل في المقارنة)</span>
-            <input id="add-lead" className="input" value={effLead} onChange={e => { setLead(e.target.value); setLeadTouched(true) }} placeholder="يُستخرج تلقائياً إن جاء قبل نقطتين" />
-          </label>
+          {leadOpen ? (
+            <label className="field"><span>ما قبل التعريف، مثل «الواجب:» أو «والحكم عندنا»، ولا يدخل في المقارنة</span>
+              <input id="add-lead" className="input" value={effLead} onChange={e => { setLead(e.target.value); setLeadTouched(true) }} placeholder="اتركه فارغاً إن بدأ النص بالتعريف مباشرة" />
+            </label>
+          ) : effLead ? (
+            <p className="small muted" style={{ margin: 0 }}>«{effLead}» يُعدّ عنواناً للتعريف ولا يدخل في المقارنة. <button className="linkish small" type="button" onClick={() => setLeadOpen(true)}>تعديل</button></p>
+          ) : raw.trim() ? (
+            <button className="linkish small" type="button" style={{ alignSelf: 'flex-start' }} onClick={() => setLeadOpen(true)}>في أول النص لفظ لا يدخل في المقارنة؟</button>
+          ) : null}
           {error && <p className="warn" role="alert">{error}</p>}
           <div className="sticky-foot">
             <button className="btn primary block" onClick={() => (body ? next('text') : setError('اكتب النص أولاً.'))}>التالي</button>
@@ -124,7 +134,7 @@ export default function Add() {
       {step === 'issue' && (
         <Picker
           title="في أي مسألة؟"
-          items={issues.map(i => ({ id: i.id, title: i.name, meta: i.section ?? '' }))}
+          items={issues.map(i => ({ id: i.id, title: i.name, meta: '', group: i.section ?? 'بلا باب' }))}
           selected={issueId}
           newLabel="مسألة جديدة"
           renderNew={(q, close) => <IssueForm initialName={q} onSaved={i => { setIssueId(i.id); close(); next('issue') }} onCancel={close} />}
@@ -156,7 +166,7 @@ export default function Add() {
 
 function Picker({ title, items, selected, newLabel, renderNew, onPick }: {
   title: string
-  items: { id: string; title: string; meta: string }[]
+  items: { id: string; title: string; meta: string; group?: string }[]
   selected: string
   newLabel: string
   renderNew: (query: string, close: () => void) => ReactNode
@@ -166,8 +176,10 @@ function Picker({ title, items, selected, newLabel, renderNew, onPick }: {
   const [adding, setAdding] = useState(items.length === 0)
   const shown = useMemo(() => {
     const t = q.trim()
-    return t ? items.filter(i => i.title.includes(t) || i.meta.includes(t)) : items
+    return t ? items.filter(i => i.title.includes(t) || i.meta.includes(t) || i.group?.includes(t)) : items
   }, [q, items])
+  // المسائل تُعرض تحت أبوابها
+  const groups = [...shown.reduce((m, i) => m.set(i.group ?? '', [...(m.get(i.group ?? '') ?? []), i]), new Map<string, typeof shown>())]
 
   return (
     <div className="stack">
@@ -176,16 +188,19 @@ function Picker({ title, items, selected, newLabel, renderNew, onPick }: {
         <>
           <div className="search"><Icon.Search /><input id="pick-q" className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="ابحث" /></div>
           <button className="btn block" onClick={() => setAdding(true)}><Icon.Plus />{newLabel}{q.trim() ? `: ${q.trim()}` : ''}</button>
-          {shown.length > 0 && (
-            <div className="list">
-              {shown.map(i => (
-                <button key={i.id} className={'item' + (i.id === selected ? ' selected' : '')} onClick={() => onPick(i.id)}>
-                  <div className="grow"><div className="title">{i.title}</div>{i.meta && <div className="meta">{i.meta}</div>}</div>
-                  {i.id === selected ? <Icon.Check /> : <Icon.ChevronIn />}
-                </button>
-              ))}
+          {groups.map(([g, list]) => (
+            <div className="stack tight" key={g || 'all'}>
+              {g && <div className="section-label">{g}</div>}
+              <div className="list">
+                {list.map(i => (
+                  <button key={i.id} className={'item' + (i.id === selected ? ' selected' : '')} onClick={() => onPick(i.id)}>
+                    <div className="grow"><div className="title">{i.title}</div>{i.meta && <div className="meta">{i.meta}</div>}</div>
+                    {i.id === selected ? <Icon.Check /> : <Icon.ChevronIn />}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
+          ))}
         </>
       )}
     </div>

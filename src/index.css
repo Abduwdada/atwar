@@ -497,3 +497,7 @@ select.select { padding-right: 14px; line-height: 1.4; }
 .bar.wide { width: 100%; }
 .ocr-actions > .btn { flex: 0 1 auto; }
 .hollow-dot { background: none; border: 1.5px dashed var(--muted); width: 11px; height: 11px; }
+
+.side-block { display: flex; flex-direction: column; gap: 2px; }
+.sci-grp { width: auto; min-height: 36px; font-size: 14px; max-width: 46%; }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }

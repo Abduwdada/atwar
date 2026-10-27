@@ -6,7 +6,7 @@ import {
   ConflictError, fetchPublished, getSync, getToken, publishRemote, pullRemote, remoteSha, setSync, setToken,
   type SyncState,
 } from './remote'
-import type { Book, Issue, Link, Passage, Science } from './types'
+import type { Book, Issue, Link, Passage, Science, ScienceGroup } from './types'
 import { analyseScience, type ScienceAnalysis } from '../engine/analyse'
 import { DEFAULT_TH, type Thresholds } from '../engine/compare'
 import { BOOK_KINDS, type ListKey } from './types'
@@ -16,7 +16,8 @@ interface Store {
   loadError: string
   // الزائر يرى البيانات المنشورة للقراءة فقط، والمؤلف يعمل على نسخته في الجهاز ثم ينشرها
   canEdit: boolean
-  sciences: Science[]
+  sciences: Science[] // بالترتيب الذي اختاره المؤلف
+  groups: ScienceGroup[]
   science: Science | undefined
   setScienceId: (id: string) => void
   books: Book[] // مرتبة بسنة الوفاة
@@ -88,6 +89,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // نسخة المؤلف: قاعدة البيانات في الجهاز (لا تُفتح للزائر)
   const lSciences = useLiveQuery(async () => (owner ? await db.sciences.orderBy('createdAt').toArray() : undefined), [owner])
+  const lGroups = useLiveQuery(async () => (owner ? await db.groups.orderBy('order').toArray() : undefined), [owner])
   const lBooks = useLiveQuery(async () => (owner ? await db.books.where({ scienceId }).sortBy('death') : undefined), [owner, scienceId])
   const lIssues = useLiveQuery(async () => (owner ? await db.issues.where({ scienceId }).sortBy('createdAt') : undefined), [owner, scienceId])
   const lPassages = useLiveQuery(async () => (owner ? await db.passages.where({ scienceId }).toArray() : undefined), [owner, scienceId])
@@ -95,7 +97,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const allLocal = useLiveQuery(async () => (owner ? { books: await db.books.toArray(), issues: await db.issues.toArray(), passages: await db.passages.toArray() } : undefined), [owner])
   const localHash = useLiveQuery(async () => (owner ? datasetHash(await exportAll()) : undefined), [owner])
 
-  const sciences = owner ? lSciences : remote?.sciences
+  const sciences = useMemo(() => {
+    const list = owner ? lSciences : remote?.sciences
+    return list && [...list].sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt))
+  }, [owner, lSciences, remote])
+  const groups = useMemo(() => [...((owner ? lGroups : remote?.groups) ?? [])].sort((a, b) => a.order - b.order), [owner, lGroups, remote])
   useEffect(() => {
     if (sciences && sciences.length && !sciences.some(s => s.id === scienceId)) setScienceId(sciences[0].id)
   }, [sciences, scienceId, setScienceId])
@@ -158,10 +164,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       kinds: merge(sci?.lists?.kinds, books.map(b => b.kind), BOOK_KINDS),
       sections: merge(sci?.lists?.sections, issues.map(i => i.section)),
     }
-    const ready = owner ? !!(lSciences && lBooks && lIssues && lPassages && lLinks) : !!remote
+    const ready = owner ? !!(lSciences && lGroups && lBooks && lIssues && lPassages && lLinks) : !!remote
     return {
       ready, loadError, canEdit: owner,
       sciences: sciences ?? [],
+      groups,
       science: sciences?.find(s => s.id === scienceId),
       setScienceId,
       books, issues, passages, links,
@@ -177,7 +184,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       localWorkHidden: !owner && localWorkHidden,
       login, logout, pull, publish,
     }
-  }, [owner, remote, loadError, sciences, scienceId, setScienceId, lSciences, lBooks, lIssues, lPassages, lLinks, allLocal, localHash, sync, localWorkHidden, login, logout, pull, publish])
+  }, [owner, remote, loadError, sciences, groups, lGroups, scienceId, setScienceId, lSciences, lBooks, lIssues, lPassages, lLinks, allLocal, localHash, sync, localWorkHidden, login, logout, pull, publish])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

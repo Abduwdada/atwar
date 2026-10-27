@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 import ListEditor from '../ui/ListEditor'
+import SciencesManager from '../ui/SciencesManager'
 import { toNum } from '../ui/forms'
 import { analyseScience } from '../engine/analyse'
 import { DEFAULT_TH, RELATIONS, type Relation, type Thresholds } from '../engine/compare'
@@ -209,12 +210,24 @@ export default function Settings() {
         </section>
       )}
 
+      {canEdit && (
+        <section className="stack tight">
+          <div className="section-label">العلوم ومجموعاتها</div>
+          <SciencesManager />
+        </section>
+      )}
+
       <section className="stack tight">
-        <div className="section-label">كيف تقرأ المنصة النصوص</div>
+        <div className="section-label">عن المنصة</div>
+        <ol className="how">
+          <li><b>جمع النصوص</b><span>يُنقل نص المسألة أو التعريف من كل كتاب، مع موضعه في الطبعة.</span></li>
+          <li><b>المقارنة بما سبق</b><span>يقارَن كل نص بنصوص الكتب الأقدم وفاة، فيظهر النقل بالنص، وزيادة القيود، والاختصار، والتصرف.</span></li>
+          <li><b>النسب والعائلات</b><span>تتراكم الصلات عبر المسائل، فتظهر شجرة الكتب ومن استفاد ممن، والعائلات المعرفية.</span></li>
+        </ol>
         <div className="card small">
           <p style={{ margin: 0 }}><b>توحيد الرسم:</b> تُحذف الحركات، وتوحَّد الهمزات والتاء المربوطة، وتجرَّد السوابق واللواحق عند المقارنة فقط.</p>
           <p style={{ margin: 0 }}><b>التشابه:</b> أطول تتابع مشترك من الألفاظ مع حفظ ترتيبها، مقسوماً على مجموع ألفاظ النصين.</p>
-          <p style={{ margin: 0 }}><b>التصنيف:</b> من ٩٥٪ نقل بالنص؛ وإذا حوى المتأخر ٨٠٪ من مصدره وزاد فزيادة قيد، وعكسه اختصار؛ ثم إبدال يسير من ٨٠٪، وتصرف من ٦٠٪، وتأثر من ٣٠٪.</p>
+          <p style={{ margin: 0 }}><b>التصنيف:</b> بحدود يضبطها المؤلف لكل علم من «إعدادات العلم».</p>
           <p style={{ margin: 0 }}><b>النسب:</b> أصل الكتاب هو الكتاب الذي تراكم منه أعلى تشابه عبر المسائل، وما يحدده المؤلف من مصادر يقدَّم على اقتراح النظام.</p>
           <p style={{ margin: 0 }} className="muted">التشابه اللفظي قرينة لا دليل؛ قد يرجع نصان إلى أصل مشترك، وقد يتأثر كتاب بآخر في المعنى دون اللفظ.</p>
         </div>

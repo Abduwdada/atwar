@@ -13,6 +13,7 @@ import PassageEdit from './screens/PassageEdit'
 import { Compare, Matrix, Tree } from './screens/Views'
 import Settings, { ScienceSettings } from './screens/More'
 import Search from './screens/Search'
+import { groupSciences } from './ui/SciencesManager'
 
 // الروابط القديمة قبل أن يصير لكل علم صفحته: تُحوَّل إلى العلم المفتوح آخر مرة
 function Legacy({ to }: { to: string }) {
@@ -32,7 +33,7 @@ function SubKeyed({ el }: { el: (key: string) => ReactElement }) {
 
 function Shell() {
   const { pathname, hash } = useLocation()
-  const { ready, loadError, canEdit, dirty, science, sciences } = useStore()
+  const { ready, loadError, canEdit, dirty, science, sciences, groups } = useStore()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (!hash) window.scrollTo(0, 0) }, [pathname])
   const inScience = pathname.startsWith('/s/')
@@ -45,8 +46,12 @@ function Shell() {
       <nav className="sidebar" aria-label="الأقسام">
         <NavLink to="/" end className="brand">أطوار<small>رصد تطور العلوم عبر نصوصها</small></NavLink>
         <NavLink to="/" end><Icon.Home />العلوم</NavLink>
-        <div className="side-group">العلوم المرصودة</div>
-        {sciences.map(s => <NavLink key={s.id} to={`/s/${s.id}`} className="side-sci">{s.name}</NavLink>)}
+        {groupSciences(sciences, groups).map(({ group, items }) => (
+          <div key={group?.id ?? 'rest'} className="side-block">
+            <div className="side-group">{group?.name ?? (groups.length ? 'علوم أخرى' : 'العلوم المرصودة')}</div>
+            {items.map(s => <NavLink key={s.id} to={`/s/${s.id}`} className="side-sci">{s.name}</NavLink>)}
+          </div>
+        ))}
         <div className="side-spacer" />
         <NavLink to="/settings"><Icon.Settings />الإعدادات{canEdit && dirty && <span className="dot" title="تعديلات لم تُنشر" />}</NavLink>
         <div className="side-foot small muted">

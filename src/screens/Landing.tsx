@@ -4,10 +4,11 @@ import { db, newId } from '../data/db'
 import { useStore } from '../data/store'
 import { ar, count } from '../ui/bits'
 import * as Icon from '../ui/icons'
+import { groupSciences } from '../ui/SciencesManager'
 
 // الواجهة العامة للمنصة: ما هي، والعلوم المرصودة فيها
 export default function Landing() {
-  const { sciences, scienceStats, canEdit } = useStore()
+  const { sciences, groups, scienceStats, canEdit } = useStore()
   const nav = useNavigate()
   const open = (id: string) => nav(`/s/${id}`)
   const [adding, setAdding] = useState(false)
@@ -47,9 +48,11 @@ export default function Landing() {
             <div className="row"><button className="btn primary" type="submit">إنشاء العلم</button><button className="btn" type="button" onClick={() => setAdding(false)}>إلغاء</button></div>
           </form>
         )}
-        {sciences.length ? (
+        {sciences.length ? groupSciences(sciences, groups).map(({ group, items }) => (
+          <div className="stack tight" key={group?.id ?? 'rest'}>
+            {(group || groups.length > 0) && <div className="section-label">{group?.name ?? 'علوم أخرى'}</div>}
           <div className="science-grid">
-            {sciences.map(s => {
+            {items.map(s => {
               const st = scienceStats.get(s.id)
               return (
                 <button key={s.id} className="science-card" onClick={() => open(s.id)}>
@@ -68,18 +71,10 @@ export default function Landing() {
               )
             })}
           </div>
-        ) : <div className="empty card">لم يُنشر أي علم بعد.</div>}
+          </div>
+        )) : <div className="empty card">لم يُنشر أي علم بعد.</div>}
       </section>
 
-      <section className="stack tight">
-        <div className="section-head"><h2>كيف تعمل المنصة</h2></div>
-        <ol className="how">
-          <li><b>جمع النصوص</b><span>يُنقل نص المسألة أو التعريف من كل كتاب، مع موضعه في الطبعة.</span></li>
-          <li><b>المقارنة بما سبق</b><span>يقارَن كل نص بنصوص الكتب الأقدم وفاة، فيظهر النقل بالنص، وزيادة القيود، والاختصار، والتصرف.</span></li>
-          <li><b>النسب والعائلات</b><span>تتراكم الصلات عبر المسائل، فتظهر شجرة الكتب ومن استفاد ممن، والعائلات المعرفية.</span></li>
-        </ol>
-        <p className="small muted" style={{ margin: '0 4px' }}>التشابه في اللفظ قرينة لا دليل، والحكم الأخير للباحث؛ لذلك تُعرض الصلات المعلنة في كتب التراجم بجانب ما تستنتجه المنصة.</p>
-      </section>
     </>
   )
 }
