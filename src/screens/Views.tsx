@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { db } from '../data/db'
+import * as Icon from '../ui/icons'
 import { sp } from '../nav'
 import { Link } from 'react-router-dom'
 import { useStore } from '../data/store'
@@ -72,21 +74,27 @@ export function Matrix() {
 
 const ORD = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر', 'الحادي عشر', 'الثاني عشر', 'الثالث عشر', 'الرابع عشر', 'الخامس عشر']
 
+type Pt = { x: number; y: number }
+
 export function Tree() {
-  const { books, links, analysis, passages } = useStore()
+  const { books, links, analysis, passages, science, canEdit } = useStore()
   const [sel, setSel] = useState<string>('')
   const [showInf, setShowInf] = useState(true)
   const [showDec, setShowDec] = useState(true)
+  const [zoom, setZoom] = useState(1)
+  // مواضع يغيّرها الزائر بالسحب لنفسه، ومواضع المؤلف تُحفظ مع العلم وتُنشر
+  const [local, setLocal] = useState<Record<string, Pt>>({})
+  const [dragging, setDragging] = useState<{ id: string; dx: number; dy: number; moved: boolean } | null>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
   const withTexts = new Set(passages.map(p => p.bookId))
-  // لون لكل مذهب، بترتيب أول ظهوره زمنياً
   const schools = [...new Set(books.map(b => b.school || 'غير محدد'))]
   const colorOf = (s?: string) => `var(--cat-${(schools.indexOf(s || 'غير محدد') % 6) + 1})`
 
   if (!books.length) return <div className="empty card">أضف كتباً ونصوصاً لتظهر الشجرة.</div>
 
-  // الزمن يتنزّل من الأعلى: لكل كتاب صف بحسب سنة وفاته، فلا تتداخل الأسماء
+  // الترتيب التلقائي: الزمن يتنزّل صفاً لكل كتاب، والفروع متجاورة تحت أصلها
   const row = new Map(books.map((b, i) => [b.id, i]))
-  // والأعمدة كترتيب الشجرة: الفروع متجاورة، والأصل في وسط فروعه
   const kids = new Map(books.map(b => [b.id, [] as string[]]))
   books.forEach(b => { const p = analysis.parent.get(b.id); if (p) kids.get(p.from)?.push(b.id) })
   const col = new Map<string, number>()
@@ -100,39 +108,92 @@ export function Tree() {
     return x
   }
   books.filter(b => !analysis.parent.has(b.id)).forEach(b => place(b.id))
+  const colW = 150, rowH = 64
+  const auto = (id: string): Pt => ({ x: -col.get(id)! * colW, y: row.get(id)! * rowH })
+  const saved = science?.treeLayout ?? {}
+  const pos = new Map(books.map(b => [b.id, local[b.id] ?? saved[b.id] ?? auto(b.id)]))
+  const customized = Object.keys(local).length > 0 || Object.keys(saved).length > 0
 
-  const colW = 150, rowH = 64, padR = 110, padL = 180, top = 24
-  const W = padR + Math.max(slot - 1, 0) * colW + padL
-  const H = top + books.length * rowH + 8
-  const pos = new Map(books.map(b => [b.id, { x: W - padR - col.get(b.id)! * colW, y: top + row.get(b.id)! * rowH + rowH / 2 }]))
-  const curve = (a: { x: number; y: number }, b: { x: number; y: number }, bend: number) => {
-    const y1 = a.y + 11, y2 = b.y - 11, dy = Math.max(24, (y2 - y1) / 2)
+  // حدود الرسم تتسع لما سُحب خارجها، مع مساحة للأسماء على اليسار ولأسماء القرون على اليمين
+  const xs = [...pos.values()].map(p => p.x), ys = [...pos.values()].map(p => p.y)
+  const minX = Math.min(...xs) - 200, maxX = Math.max(...xs) + 120
+  const minY = Math.min(...ys, 0) - 36, maxY = Math.max(...ys, (books.length - 1) * rowH) + 40
+  const W = maxX - minX, H = maxY - minY
+
+  const curve = (a: Pt, b: Pt, bend: number) => {
+    const goesDown = b.y >= a.y
+    const y1 = a.y + (goesDown ? 11 : -11), y2 = b.y + (goesDown ? -11 : 11), dy = (y2 - y1) / 2
     return `M${a.x},${y1} C${a.x + bend},${y1 + dy} ${b.x + bend},${y2 - dy} ${b.x},${y2}`
   }
   const title = (id: string) => books.find(b => b.id === id)?.title ?? ''
   const century = (d: number) => Math.floor(d / 100)
 
+  const toSvg = (e: React.PointerEvent): Pt => {
+    const m = svgRef.current!.getScreenCTM()!.inverse()
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m)
+    return { x: p.x, y: p.y }
+  }
+  function onDown(e: React.PointerEvent, id: string) {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const p = toSvg(e), cur = pos.get(id)!
+    setDragging({ id, dx: p.x - cur.x, dy: p.y - cur.y, moved: false })
+  }
+  function onMove(e: React.PointerEvent) {
+    if (!dragging) return
+    const p = toSvg(e)
+    const next = { x: Math.round(p.x - dragging.dx), y: Math.round(p.y - dragging.dy) }
+    const cur = pos.get(dragging.id)!
+    if (!dragging.moved && Math.hypot(next.x - cur.x, next.y - cur.y) < 4) return
+    setDragging({ ...dragging, moved: true })
+    setLocal(l => ({ ...l, [dragging.id]: next }))
+  }
+  async function onUp(id: string) {
+    const d = dragging
+    setDragging(null)
+    if (!d?.moved) return setSel(id)
+    if (canEdit && science) {
+      await db.sciences.update(science.id, { treeLayout: { ...saved, [id]: local[id] } })
+      setLocal(l => { const { [id]: _, ...rest } = l; return rest })
+    }
+  }
+  async function resetLayout() {
+    setLocal({})
+    if (canEdit && science) await db.sciences.update(science.id, { treeLayout: undefined })
+  }
+  const fit = () => { const w = wrapRef.current?.clientWidth; if (w) setZoom(Math.max(0.3, Math.min(2, (w - 2) / W))) }
+  const step = (f: number) => setZoom(z => Math.max(0.3, Math.min(2.5, +(z * f).toFixed(2))))
+
   return (
     <>
       <div className="legend">
-        <span>الأقدم في الأعلى، وكل كتاب تحت أصله.</span>
         <label className="check"><input id="tg-inf" type="checkbox" checked={showInf} onChange={e => setShowInf(e.target.checked)} /><span className="swl" />مستنتجة من النصوص</label>
         <label className="check"><input id="tg-dec" type="checkbox" checked={showDec} onChange={e => setShowDec(e.target.checked)} /><span className="swl dash" />معلنة</label>
         {schools.map(s => <span key={s}><i className="sw-dot" style={{ background: colorOf(s) }} />{s}</span>)}
       </div>
-      <div className="svgwrap">
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ minWidth: Math.min(W, 1100) }} role="img" aria-label="شجرة الكتب، الأقدم في الأعلى">
+      <div className="controls">
+        <span className="small muted">اسحب أي كتاب لتحريكه، والأسهم تتبعه.{canEdit ? ' ترتيبك يُحفظ ويُنشر للزوار.' : ''}</span>
+        <span className="zoom-btns">
+          <button className="icon-btn" onClick={() => step(1 / 1.2)} aria-label="تصغير"><Icon.Minus /></button>
+          <span className="num small">{ar(Math.round(zoom * 100))}٪</span>
+          <button className="icon-btn" onClick={() => step(1.2)} aria-label="تكبير"><Icon.Plus /></button>
+          <button className="btn sm" onClick={fit}>ملاءمة الشاشة</button>
+        </span>
+        {customized && <button className="btn sm ghost" onClick={resetLayout}>الترتيب التلقائي</button>}
+      </div>
+      <div className="svgwrap" ref={wrapRef}>
+        <svg ref={svgRef} viewBox={`${minX} ${minY} ${W} ${H}`} style={{ width: W * zoom, minWidth: 0, height: 'auto' }}
+          role="img" aria-label="شجرة الكتب، الأقدم في الأعلى" onPointerMove={onMove}>
           <defs>
             <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)" /></marker>
             <marker id="arG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--gold)" /></marker>
           </defs>
           {books.map((b, i) => {
             if (i > 0 && century(books[i - 1].death) === century(b.death)) return null
-            const y = top + i * rowH
+            const y = i * rowH - rowH / 2
             return (
               <g key={'c' + b.id}>
-                {i > 0 && <line x1={8} y1={y} x2={W - 8} y2={y} stroke="var(--line)" />}
-                <text x={W - 12} y={y + 22} textAnchor="end" fontSize="12.5" fontWeight="600" fill="var(--muted)" fontFamily="var(--f-ui)">القرن {ORD[century(b.death)] ?? ar(century(b.death) + 1)}</text>
+                {i > 0 && <line x1={minX + 8} y1={y} x2={maxX - 8} y2={y} stroke="var(--line)" />}
+                <text x={maxX - 12} y={y + 22} textAnchor="end" fontSize="12.5" fontWeight="600" fill="var(--muted)" fontFamily="var(--f-ui)">القرن {ORD[century(b.death)] ?? ar(century(b.death) + 1)}</text>
               </g>
             )
           })}
@@ -154,8 +215,10 @@ export function Tree() {
             const p = pos.get(b.id)!
             const has = withTexts.has(b.id)
             return (
-              <g key={b.id} className={'node' + (sel === b.id ? ' sel' : '')} tabIndex={0} role="button" aria-label={b.title}
-                onClick={() => setSel(b.id)} onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSel(b.id)}>
+              <g key={b.id} className={'node draggable' + (sel === b.id ? ' sel' : '') + (dragging?.id === b.id ? ' grabbing' : '')} tabIndex={0} role="button" aria-label={b.title}
+                onPointerDown={e => onDown(e, b.id)} onPointerUp={() => onUp(b.id)} onPointerCancel={() => setDragging(null)}
+                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSel(b.id)}>
+                <rect x={p.x - 16 - b.title.length * 9} y={p.y - 16} width={b.title.length * 9 + 30} height={40} fill="transparent" />
                 <circle cx={p.x} cy={p.y} r="9" fill={has ? colorOf(b.school) : 'var(--surface)'} style={has ? undefined : { stroke: colorOf(b.school), strokeDasharray: '3 2' }} />
                 <text x={p.x - 16} y={p.y + 1} textAnchor="end" fontFamily="var(--f-text)" fontSize="17" fontWeight="700" fill="var(--ink)">{b.title}</text>
                 <text x={p.x - 16} y={p.y + 18} textAnchor="end" fontFamily="var(--f-ui)" fontSize="11.5" fill="var(--muted)">{`${b.author} · ${ar(b.death)}هـ`}</text>

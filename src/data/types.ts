@@ -2,6 +2,8 @@ export interface Science {
   id: string
   name: string
   description?: string
+  // مواضع الكتب في الشجرة كما رتبها المؤلف بالسحب
+  treeLayout?: Record<string, { x: number; y: number }>
   createdAt: number
 }
 

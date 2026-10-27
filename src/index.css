@@ -425,3 +425,9 @@ table.matrix { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 .side-foot { padding: 6px 12px 0; }
 .side-foot .pending { color: var(--gold); padding: 0; background: none; display: inline; font-weight: 600; }
 .tab-sci { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zoom-btns { display: inline-flex; align-items: center; gap: 4px; }
+.zoom-btns .icon-btn { width: 34px; height: 34px; }
+.node.draggable { cursor: grab; touch-action: none; }
+.node.grabbing { cursor: grabbing; }
+.node.grabbing circle { stroke: var(--accent); stroke-width: 3; }
+.node:focus { outline: none; }

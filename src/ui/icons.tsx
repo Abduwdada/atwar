@@ -27,3 +27,4 @@ export const Overview = () => <I><rect x="4" y="4" width="7" height="7" rx="1.5"
 export const Up = () => <I><path d="M6 15l6-6 6 6" /></I>
 export const Down = () => <I><path d="M6 9l6 6 6-6" /></I>
 export const Settings = () => <I><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4.9a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.5a7 7 0 0 0-2 1.2l-2.4-.9-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-.9a7 7 0 0 0 2 1.2L10 21h4l.5-2.5a7 7 0 0 0 2-1.2l2.4.9 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z" /></I>
+export const Minus = () => <I><path d="M5 12h14" /></I>
