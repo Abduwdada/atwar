@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@fontsource/amiri": "^5.2.5",
+    "@fontsource/aref-ruqaa": "^5.2.5",
     "@fontsource/ibm-plex-sans-arabic": "^5.2.5",
-    "@fontsource/reem-kufi": "^5.2.5",
     "dexie": "^4.0.11",
     "dexie-react-hooks": "^1.1.7",
     "react": "^19.1.0",
