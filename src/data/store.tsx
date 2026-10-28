@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, datasetHash, exportAll, hasLocalWork, publishable, replaceAll, type Backup } from './db'
+import { db, datasetHash, ensureAuthors, exportAll, hasLocalWork, publishable, replaceAll, type Backup } from './db'
 import { SAMPLE_SCIENCE_ID } from './seed'
 import {
   ConflictError, fetchPublished, getSync, getToken, publishRemote, pullRemote, remoteSha, setSync, setToken,
   type SyncState,
 } from './remote'
-import type { Book, Issue, Link, Passage, Science, ScienceGroup } from './types'
+import type { Author, Book, Issue, Link, Passage, Science, ScienceGroup, XLink } from './types'
 import { analyseScience, type ScienceAnalysis } from '../engine/analyse'
 import { DEFAULT_TH, type Thresholds } from '../engine/compare'
 import { BOOK_KINDS, type ListKey } from './types'
@@ -28,6 +28,11 @@ interface Store {
   issueById: Map<string, Issue>
   analysis: ScienceAnalysis
   hasSample: boolean
+  // عبر العلوم كلها: سجل المؤلفين، والصلات بين العلوم، وكل الكتب
+  authors: Author[]
+  authorById: Map<string, Author>
+  xlinks: XLink[]
+  allBooks: Book[]
   thresholds: Thresholds
   lists: Record<ListKey, string[]>
   // ملخص كل علم للصفحة الرئيسية العامة
@@ -94,7 +99,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const lIssues = useLiveQuery(async () => (owner ? await db.issues.where({ scienceId }).sortBy('createdAt') : undefined), [owner, scienceId])
   const lPassages = useLiveQuery(async () => (owner ? await db.passages.where({ scienceId }).toArray() : undefined), [owner, scienceId])
   const lLinks = useLiveQuery(async () => (owner ? await db.links.where({ scienceId }).toArray() : undefined), [owner, scienceId])
-  const allLocal = useLiveQuery(async () => (owner ? { books: await db.books.toArray(), issues: await db.issues.toArray(), passages: await db.passages.toArray() } : undefined), [owner])
+  const allLocal = useLiveQuery(async () => (owner ? { books: await db.books.toArray(), issues: await db.issues.toArray(), passages: await db.passages.toArray(), authors: await db.authors.toArray(), xlinks: await db.xlinks.toArray() } : undefined), [owner])
+  // الكتب المضافة قبل سجل المؤلفين تُربط به مرة واحدة
+  useEffect(() => { if (owner) ensureAuthors().catch(() => {}) }, [owner])
   const localHash = useLiveQuery(async () => (owner ? datasetHash(publishable(await exportAll())) : undefined), [owner])
 
   const sciences = useMemo(() => {
@@ -154,6 +161,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const issues = sortIssues(owner ? lIssues ?? [] : pick(remote?.issues))
     const passages = owner ? lPassages ?? [] : pick(remote?.passages)
     const links = owner ? lLinks ?? [] : pick(remote?.links)
+    const allAuthors = [...((owner ? allLocal?.authors : remote?.authors) ?? [])].sort((a, b) => (a.death ?? 9999) - (b.death ?? 9999))
     const sci = sciences?.find(s => s.id === scienceId)
     const thresholds = { ...DEFAULT_TH, ...sci?.thresholds }
     // القائمة كما رتبها المؤلف، مع أي قيمة مستعملة لم تدخلها بعد
@@ -179,6 +187,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       lists,
       hasSample: passages.some(x => x.sample) || books.some(x => x.sample),
       scienceStats: statsOf(owner ? allLocal : remote ?? undefined),
+      authors: allAuthors,
+      authorById: new Map(allAuthors.map(a => [a.id, a])),
+      xlinks: (owner ? allLocal?.xlinks : remote?.xlinks) ?? [],
+      allBooks: (owner ? allLocal?.books : remote?.books) ?? [],
       sync,
       dirty: owner && !!localHash && localHash !== sync?.hash,
       localWorkHidden: !owner && localWorkHidden,

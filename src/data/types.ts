@@ -31,11 +31,40 @@ export interface Science {
 
 export const BOOK_KINDS = ['أصل', 'متن', 'شرح', 'حاشية', 'مختصر', 'نظم', 'تقريرات'] as const
 
+// المؤلف في سجل واحد لكل العلوم، فتُجمع كتبه في كل علم صنّف فيه
+export interface Author {
+  id: string
+  name: string
+  death?: number
+  bio?: string
+  createdAt: number
+}
+
+export const XLINK_TYPES = {
+  method: 'انتقال منهج',
+  term: 'نقل مصطلح',
+  school: 'تتلمذ واستمداد',
+  critique: 'رد ونقد',
+  other: 'صلة أخرى',
+} as const
+export type XLinkType = keyof typeof XLINK_TYPES
+
+// صلة بين كتابين من علمين مختلفين: الأول أثّر في الثاني
+export interface XLink {
+  id: string
+  from: string
+  to: string
+  type: XLinkType
+  note: string
+  createdAt: number
+}
+
 export interface Book {
   id: string
   scienceId: string
   title: string
-  author: string
+  author: string // اسم المؤلف كما يظهر، ويُربط بسجل المؤلفين عبر authorId
+  authorId?: string
   death: number // سنة وفاة المؤلف بالهجري، وعليها يقوم الترتيب الزمني
   deathNote?: string // مثل: وقيل ٦٩١هـ
   school?: string // المذهب

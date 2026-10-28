@@ -4,6 +4,7 @@ import { StoreProvider, useStore } from './data/store'
 import { PrefsProvider } from './data/prefs'
 import * as Icon from './ui/icons'
 import Landing from './screens/Landing'
+import { AuthorList, AuthorPage } from './screens/Authors'
 import ScienceShell from './screens/ScienceShell'
 import Home from './screens/Home'
 import Add from './screens/Add'
@@ -46,6 +47,7 @@ function Shell() {
       <nav className="sidebar" aria-label="الأقسام">
         <NavLink to="/" end className="brand">أطوار<small>رصد تطور العلوم عبر نصوصها</small></NavLink>
         <NavLink to="/" end><Icon.Home />العلوم</NavLink>
+        <NavLink to="/authors"><Icon.Books />المؤلفون</NavLink>
         {groupSciences(sciences, groups).map(({ group, items }) => (
           <div key={group?.id ?? 'rest'} className="side-block">
             <div className="side-group">{group?.name ?? (groups.length ? 'علوم أخرى' : 'العلوم المرصودة')}</div>
@@ -66,6 +68,8 @@ function Shell() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/authors" element={<AuthorList />} />
+            <Route path="/authors/:id" element={<AuthorPage />} />
             <Route path="/s/:sid" element={<ScienceShell />}>
               <Route index element={<Home />} />
               <Route path="books" element={<BookList />} />

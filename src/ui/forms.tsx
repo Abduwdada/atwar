@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { db, newId } from '../data/db'
+import { db, ensureAuthors, newId } from '../data/db'
 import { useStore } from '../data/store'
 import type { Book, Issue, ListKey } from '../data/types'
 import { addItem } from '../data/lists'
@@ -48,6 +48,7 @@ export function BookForm({ book, onSaved, onCancel }: { book?: Book; onSaved: (b
   const { science } = useStore()
   const [title, setTitle] = useState(book?.title ?? '')
   const [author, setAuthor] = useState(book?.author ?? '')
+  const [authorId, setAuthorId] = useState(book?.authorId)
   const [death, setDeath] = useState(book ? ar(book.death) : '')
   const [deathNote, setDeathNote] = useState(book?.deathNote ?? '')
   const [school, setSchool] = useState(book?.school ?? '')
@@ -62,10 +63,12 @@ export function BookForm({ book, onSaved, onCancel }: { book?: Book; onSaved: (b
     if (!Number.isInteger(d) || d < 1 || d > 1500) return setError('اكتب سنة الوفاة بالهجري رقماً، مثل ٦٠٦.')
     const saved: Book = {
       ...(book ?? { id: newId(), scienceId: science!.id, createdAt: Date.now() }),
-      title: title.trim(), author: author.trim(), death: d,
+      title: title.trim(), author: author.trim(), authorId, death: d,
       deathNote: deathNote.trim() || undefined, school: school.trim() || undefined, kind: kind || undefined,
     }
     await db.books.put(saved)
+    // مؤلف جديد لم يُختر من السجل يُضاف إليه، أو يُربط بمن يطابقه اسماً ووفاة
+    if (!authorId) await ensureAuthors()
     onSaved(saved)
   }
 
@@ -74,9 +77,9 @@ export function BookForm({ book, onSaved, onCancel }: { book?: Book; onSaved: (b
       <label className="field"><span>عنوان الكتاب</span>
         <input id="bf-title" className="input" value={title} onChange={e => { setTitle(e.target.value); setError('') }} placeholder="عنوان الكتاب كما اشتهر" autoFocus />
       </label>
-      <label className="field"><span>المؤلف</span>
-        <input id="bf-author" className="input" value={author} onChange={e => { setAuthor(e.target.value); setError('') }} placeholder="اسم المؤلف" />
-      </label>
+      <AuthorField value={author} authorId={authorId}
+        onType={v => { setAuthor(v); setAuthorId(undefined); setError('') }}
+        onPick={a => { setAuthor(a.name); setAuthorId(a.id); if (!death.trim() && a.death) setDeath(ar(a.death)) }} />
       <div className="row">
         <label className="field"><span>سنة الوفاة (هـ)</span>
           <input id="bf-death" className="input num" inputMode="numeric" value={death} onChange={e => { setDeath(e.target.value); setError('') }} placeholder="مثل ٦٠٦" />
@@ -95,6 +98,36 @@ export function BookForm({ book, onSaved, onCancel }: { book?: Book; onSaved: (b
         {onCancel && <button className="btn" type="button" onClick={onCancel}>إلغاء</button>}
       </div>
     </form>
+  )
+}
+
+// اسم المؤلف مع اقتراحات من سجل المؤلفين في كل العلوم
+function AuthorField({ value, authorId, onType, onPick }: { value: string; authorId?: string; onType: (v: string) => void; onPick: (a: { id: string; name: string; death?: number }) => void }) {
+  const { authors, allBooks, sciences } = useStore()
+  const [open, setOpen] = useState(false)
+  const key = (s: string) => s.replace(/[\u064B-\u065F]/g, '').replace(/[أإآ]/g, 'ا').trim()
+  const q = key(value)
+  const matches = q ? authors.filter(a => key(a.name).includes(q)).slice(0, 6) : []
+  const sciName = new Map(sciences.map(s => [s.id, s.name]))
+  const where = (id: string) => [...new Set(allBooks.filter(b => b.authorId === id).map(b => sciName.get(b.scienceId)).filter(Boolean))].join('، ')
+  return (
+    <div className="field author-field">
+      <label htmlFor="bf-author"><span>المؤلف</span></label>
+      <input id="bf-author" className="input" value={value} autoComplete="off" placeholder="اسم المؤلف"
+        onChange={e => { onType(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+      {authorId && <span className="small" style={{ color: 'var(--accent)' }}>مرتبط بسجل المؤلفين{where(authorId) ? ` · له كتب في: ${where(authorId)}` : ''}</span>}
+      {open && !authorId && matches.length > 0 && (
+        <div className="suggest" role="listbox">
+          {matches.map(a => (
+            <button type="button" role="option" key={a.id} className="suggest-item" onMouseDown={e => e.preventDefault()} onClick={() => { onPick(a); setOpen(false) }}>
+              <b>{a.name}</b>{a.death ? <span className="muted small"> · ت {ar(a.death)}هـ</span> : null}
+              {where(a.id) && <span className="muted small"> · {where(a.id)}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {!authorId && value.trim() && !matches.length && <span className="small muted">مؤلف جديد، يُضاف إلى السجل عند الحفظ.</span>}
+    </div>
   )
 }
 

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuthorBooks } from './Authors'
 import { db, newId } from '../data/db'
 import { useStore } from '../data/store'
 import { ar, count } from '../ui/bits'
@@ -77,6 +78,33 @@ export default function Landing() {
         )) : <div className="empty card">لم يُنشر أي علم بعد.</div>}
       </section>
 
+      <BridgeScholars />
     </>
+  )
+}
+
+// من صنّف في أكثر من علم: مدخل إلى خارطة التطور
+function BridgeScholars() {
+  const { authors, sciences } = useStore()
+  const byAuthor = useAuthorBooks()
+  const sciName = new Map(sciences.map(s => [s.id, s.name]))
+  const bridges = authors
+    .map(a => ({ a, scis: [...new Set((byAuthor.get(a.id) ?? []).map(b => b.scienceId))] }))
+    .filter(x => x.scis.length > 1)
+  return (
+    <section className="stack tight">
+      <div className="section-head"><h2>العلماء الجسور</h2><Link to="/authors">كل المؤلفين</Link></div>
+      {bridges.length ? (
+        <div className="list">
+          {bridges.map(({ a, scis }) => (
+            <Link key={a.id} className="item" to={`/authors/${a.id}`}>
+              <span className="num muted year-col">{a.death ? `${ar(a.death)}هـ` : '—'}</span>
+              <div className="grow"><div className="title">{a.name}</div><div className="meta">{scis.map(id => sciName.get(id)).join(' · ')}</div></div>
+              <Icon.ChevronIn />
+            </Link>
+          ))}
+        </div>
+      ) : <p className="small muted" style={{ margin: '0 4px' }}>يظهر هنا من صنّف في أكثر من علم، حين يُضاف كتاب له في علم ثانٍ بالاسم نفسه وسنة الوفاة نفسها.</p>}
+    </section>
   )
 }

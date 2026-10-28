@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { Book, Issue, Link, Passage, Science, ScienceGroup } from './types'
+import type { Author, Book, Issue, Link, Passage, Science, ScienceGroup, XLink } from './types'
 import { buildSample } from './seed'
 
 // البيانات تُحفظ على الجهاز نفسه وتعمل بلا إنترنت؛ المزامنة بين الأجهزة مرحلة لاحقة
@@ -10,6 +10,8 @@ export const db = new Dexie('atwar') as Dexie & {
   passages: EntityTable<Passage, 'id'>
   links: EntityTable<Link, 'id'>
   groups: EntityTable<ScienceGroup, 'id'>
+  authors: EntityTable<Author, 'id'>
+  xlinks: EntityTable<XLink, 'id'>
 }
 
 db.version(1).stores({
@@ -20,6 +22,7 @@ db.version(1).stores({
   links: 'id, scienceId, from, to',
 })
 db.version(2).stores({ groups: 'id, order' })
+db.version(3).stores({ authors: 'id, name', xlinks: 'id, from, to' })
 
 db.on('populate', tx => {
   const s = buildSample()
@@ -66,7 +69,12 @@ export interface Backup {
   issues: Issue[]
   passages: Passage[]
   links: Link[]
+  authors?: Author[]
+  xlinks?: XLink[]
 }
+
+const KEYS = ['groups', 'sciences', 'books', 'issues', 'passages', 'links', 'authors', 'xlinks'] as const
+const allTables = () => KEYS.map(k => db[k])
 
 export async function exportAll(): Promise<Backup> {
   return {
@@ -79,6 +87,8 @@ export async function exportAll(): Promise<Backup> {
     issues: await db.issues.toArray(),
     passages: await db.passages.toArray(),
     links: await db.links.toArray(),
+    authors: await db.authors.toArray(),
+    xlinks: await db.xlinks.toArray(),
   }
 }
 
@@ -86,22 +96,25 @@ export async function exportAll(): Promise<Backup> {
 export async function importAll(data: unknown): Promise<number> {
   const b = data as Partial<Backup>
   if (!b || b.app !== 'atwar' || !Array.isArray(b.passages)) throw new Error('الملف ليس نسخة احتياطية من أطوار.')
-  await db.transaction('rw', [db.sciences, db.books, db.issues, db.passages, db.links, db.groups], async () => {
-    await db.groups.bulkPut(b.groups ?? [])
-    await db.sciences.bulkPut(b.sciences ?? [])
-    await db.books.bulkPut(b.books ?? [])
-    await db.issues.bulkPut(b.issues ?? [])
-    await db.passages.bulkPut(b.passages ?? [])
-    await db.links.bulkPut(b.links ?? [])
+  await db.transaction('rw', allTables(), async () => {
+    for (const k of KEYS) await (db[k] as Dexie.Table).bulkPut((b[k] as unknown[]) ?? [])
   })
+  await ensureAuthors()
   return b.passages.length
 }
 
-// ما يُنشر للزوار: كل شيء عدا العلوم المخفية وما فيها
+// ما يُنشر للزوار: كل شيء عدا العلوم المخفية وما فيها، وما يتصل بها من صلات ومؤلفين
 export function publishable(b: Backup): Backup {
   const hidden = new Set(b.sciences.filter(s => s.hidden).map(s => s.id))
   const keep = <T extends { scienceId: string }>(xs: T[]) => xs.filter(x => !hidden.has(x.scienceId))
-  return { ...b, sciences: b.sciences.filter(s => !hidden.has(s.id)), books: keep(b.books), issues: keep(b.issues), passages: keep(b.passages), links: keep(b.links) }
+  const books = keep(b.books)
+  const shown = new Set(books.map(x => x.id))
+  const authorsUsed = new Set(books.map(x => x.authorId).filter(Boolean))
+  return {
+    ...b, sciences: b.sciences.filter(s => !hidden.has(s.id)), books, issues: keep(b.issues), passages: keep(b.passages), links: keep(b.links),
+    authors: (b.authors ?? []).filter(a => authorsUsed.has(a.id)),
+    xlinks: (b.xlinks ?? []).filter(x => shown.has(x.from) && shown.has(x.to)),
+  }
 }
 
 // يستبدل ما على الجهاز بالنسخة المنشورة، ويُبقي العلوم المخفية لأنها لا تُنشر أصلاً
@@ -109,19 +122,42 @@ export async function replaceAll(b: Backup) {
   const local = await exportAll()
   const hidden = new Set(local.sciences.filter(s => s.hidden).map(s => s.id))
   const mine = <T extends { scienceId: string }>(xs: T[]) => xs.filter(x => hidden.has(x.scienceId))
-  await db.transaction('rw', [db.sciences, db.books, db.issues, db.passages, db.links, db.groups], async () => {
-    await Promise.all([db.sciences.clear(), db.books.clear(), db.issues.clear(), db.passages.clear(), db.links.clear(), db.groups.clear()])
-    await db.groups.bulkAdd(b.groups ?? [])
-    await db.sciences.bulkAdd(b.sciences ?? [])
-    await db.books.bulkAdd(b.books ?? [])
-    await db.issues.bulkAdd(b.issues ?? [])
-    await db.passages.bulkAdd(b.passages ?? [])
-    await db.links.bulkAdd(b.links ?? [])
+  const myBooks = new Set(mine(local.books).map(x => x.id))
+  await db.transaction('rw', allTables(), async () => {
+    await Promise.all(allTables().map(t => t.clear()))
+    for (const k of KEYS) await (db[k] as Dexie.Table).bulkAdd((b[k] as unknown[]) ?? [])
     await db.sciences.bulkPut(local.sciences.filter(s => hidden.has(s.id)))
     await db.books.bulkPut(mine(local.books))
     await db.issues.bulkPut(mine(local.issues))
     await db.passages.bulkPut(mine(local.passages))
     await db.links.bulkPut(mine(local.links))
+    await db.xlinks.bulkPut((local.xlinks ?? []).filter(x => myBooks.has(x.from) || myBooks.has(x.to)))
+    const keepAuthors = new Set(mine(local.books).map(x => x.authorId))
+    await db.authors.bulkPut((local.authors ?? []).filter(a => keepAuthors.has(a.id)))
+  })
+  await ensureAuthors()
+}
+
+// اسم المؤلف بصورة موحدة: بلا حركات ولا فروق في الهمزات والمسافات
+export const authorKey = (name: string) => name.replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim()
+
+// يربط كل كتاب بلا مؤلف في السجل بمؤلف يحمل الاسم نفسه وسنة الوفاة نفسها، أو ينشئه
+export async function ensureAuthors() {
+  await db.transaction('rw', db.books, db.authors, async () => {
+    const loose = await db.books.filter(b => !b.authorId && !!b.author?.trim()).toArray()
+    if (!loose.length) return
+    const authors = await db.authors.toArray()
+    const index = new Map(authors.map(a => [authorKey(a.name) + '|' + (a.death ?? ''), a.id]))
+    for (const b of loose) {
+      const k = authorKey(b.author) + '|' + b.death
+      let id = index.get(k)
+      if (!id) {
+        id = newId()
+        await db.authors.add({ id, name: b.author.trim(), death: b.death, createdAt: Date.now() })
+        index.set(k, id)
+      }
+      await db.books.update(b.id, { authorId: id })
+    }
   })
 }
 
@@ -134,11 +170,9 @@ function canonical(v: unknown): unknown {
 }
 
 // بصمة المحتوى دون تاريخ التصدير، لمعرفة هل تغيّر شيء منذ آخر نشر
-export function datasetHash(b: Pick<Backup, 'sciences' | 'books' | 'issues' | 'passages' | 'links' | 'groups'>) {
+export function datasetHash(b: Partial<Backup>) {
   const byId = <T extends { id: string }>(xs: T[] = []) => [...xs].sort((x, y) => (x.id < y.id ? -1 : 1))
-  const s = JSON.stringify(canonical({
-    groups: byId(b.groups), sciences: byId(b.sciences), books: byId(b.books), issues: byId(b.issues), passages: byId(b.passages), links: byId(b.links),
-  }))
+  const s = JSON.stringify(canonical(Object.fromEntries(KEYS.map(k => [k, byId((b[k] as { id: string }[]) ?? [])]))))
   let h = 0x811c9dc5
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
   return (h >>> 0).toString(16) + ':' + s.length

@@ -6,6 +6,7 @@ import { db, newId } from '../data/db'
 import { useStore } from '../data/store'
 import { Badge, ConfirmButton, PageHead, ar, count, pct, yr } from '../ui/bits'
 import { BookForm } from '../ui/forms'
+import { XLINK_TYPES, type Book, type XLinkType } from '../data/types'
 import * as Icon from '../ui/icons'
 
 const CENTURY = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر', 'الحادي عشر', 'الثاني عشر', 'الثالث عشر', 'الرابع عشر', 'الخامس عشر']
@@ -93,7 +94,7 @@ export function BookList() {
 export function BookPage() {
   const { id = '' } = useParams()
   const nav = useNavigate()
-  const { bookById, books, passages, links, analysis, issueById, science, canEdit } = useStore()
+  const { bookById, books, passages, links, analysis, issueById, science, canEdit, authorById } = useStore()
   const book = bookById.get(id)
   const [editing, setEditing] = useState(false)
   const [linking, setLinking] = useState(false)
@@ -111,8 +112,10 @@ export function BookPage() {
   const B = ({ bid }: { bid: string }) => <Link to={sp(`/books/${bid}`)}>{bookById.get(bid)?.title}</Link>
 
   async function remove() {
-    await db.transaction('rw', db.books, db.passages, db.links, async () => {
+    await db.transaction('rw', [db.books, db.passages, db.links, db.xlinks], async () => {
       await db.passages.where({ bookId: id }).delete()
+      await db.xlinks.where('from').equals(id).delete()
+      await db.xlinks.where('to').equals(id).delete()
       await db.links.where('from').equals(id).delete()
       await db.links.where('to').equals(id).delete()
       await db.books.delete(id)
@@ -123,7 +126,7 @@ export function BookPage() {
   return (
     <>
       <PageHead back={sp("/books")} title={book.title}
-        sub={[book.author, yr(book) + (book.deathNote ? ` (${book.deathNote})` : ''), book.school, book.kind].filter(Boolean).join(' · ')}
+        sub={<>{book.authorId && authorById.has(book.authorId) ? <Link to={`/authors/${book.authorId}`}>{book.author}</Link> : book.author}{' · ' + [yr(book) + (book.deathNote ? ` (${book.deathNote})` : ''), book.school, book.kind].filter(Boolean).join(' · ')}</>}
         action={canEdit && <button className="icon-btn" onClick={() => setEditing(e => !e)} aria-label="تعديل الكتاب"><Icon.Edit /></button>} />
       {editing && (
         <div className="stack tight">
@@ -180,6 +183,8 @@ export function BookPage() {
         ) : !linking && <span className="small muted">{canEdit ? 'مثل: شرح، اختصار، أو نص المصنف في مقدمته على مصادره.' : 'لا صلات معلنة مسجلة لهذا الكتاب.'}</span>}
       </div>
 
+      <CrossScience book={book} />
+
       <div className="stack tight">
         <div className="section-label">نصوصه</div>
         {own.length ? (
@@ -230,6 +235,104 @@ function LinkForm({ bookId, scienceId, onDone }: { bookId: string; scienceId: st
         </label>
       </div>
       <label className="field"><span>المستند</span><input id="lf-note" className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="مثل: شرحٌ عليه، أو اختصارٌ له، أو نصّ المؤلف في مقدمته" /></label>
+      {error && <p className="warn" role="alert" style={{ margin: 0 }}>{error}</p>}
+      <div className="row"><button className="btn primary" type="submit">إضافة الصلة</button><button className="btn" type="button" onClick={onDone}>إلغاء</button></div>
+    </form>
+  )
+}
+
+// صلات الكتاب بعلوم أخرى: كتب مؤلفه في غيرها، والصلات المسجلة بين العلوم
+function CrossScience({ book }: { book: Book }) {
+  const { allBooks, xlinks, sciences, canEdit, authorById } = useStore()
+  const [adding, setAdding] = useState(false)
+  const sciName = new Map(sciences.map(s => [s.id, s.name]))
+  const visible = new Set(sciences.map(s => s.id))
+  const byId = new Map(allBooks.map(b => [b.id, b]))
+  const sameAuthor = book.authorId ? allBooks.filter(b => b.authorId === book.authorId && b.scienceId !== book.scienceId && visible.has(b.scienceId)) : []
+  const rel = xlinks.filter(x => x.from === book.id || x.to === book.id).filter(x => byId.has(x.from) && byId.has(x.to))
+  const go = (b: Book) => <Link to={`/s/${b.scienceId}/books/${b.id}`}>{b.title}</Link>
+  if (!canEdit && !sameAuthor.length && !rel.length) return null
+  return (
+    <div className="stack tight">
+      <div className="page-head" style={{ minHeight: 0 }}>
+        <div className="section-label" style={{ margin: 0 }}>صلاته بعلوم أخرى</div>
+        {canEdit && <button className="btn sm ghost" onClick={() => setAdding(a => !a)}><Icon.Plus />صلة بعلم آخر</button>}
+      </div>
+      {adding && <XLinkForm book={book} onDone={() => setAdding(false)} />}
+      {(sameAuthor.length > 0 || rel.length > 0) ? (
+        <div className="list">
+          {sameAuthor.map(b => (
+            <div className="item" key={'a' + b.id} style={{ cursor: 'default' }}>
+              <div className="grow">
+                <div className="title"><span className="badge mine">المؤلف نفسه</span> {go(b)} <span className="muted small">في {sciName.get(b.scienceId)}</span></div>
+                <div className="meta">{authorById.get(book.authorId!)?.name} صنّف في هذا العلم أيضاً</div>
+              </div>
+            </div>
+          ))}
+          {rel.map(x => {
+            const other = byId.get(x.from === book.id ? x.to : x.from)!
+            return (
+              <div className="item" key={x.id} style={{ cursor: 'default' }}>
+                <div className="grow">
+                  <div className="title"><span className="badge s2">{XLINK_TYPES[x.type]}</span> {x.from === book.id ? 'أثّر في' : 'أخذ عن'} {go(other)} <span className="muted small">في {sciName.get(other.scienceId) ?? 'علم غير منشور'}</span></div>
+                  {x.note && <div className="meta">{x.note}</div>}
+                </div>
+                {canEdit && <button className="icon-btn" onClick={() => db.xlinks.delete(x.id)} aria-label="حذف الصلة"><Icon.Trash /></button>}
+              </div>
+            )
+          })}
+        </div>
+      ) : !adding && <span className="small muted">مثل: انتقال منهج من المنطق إلى الأصول، أو نقل مصطلح من الأصول إلى النحو.</span>}
+    </div>
+  )
+}
+
+function XLinkForm({ book, onDone }: { book: Book; onDone: () => void }) {
+  const { sciences, allBooks } = useStore()
+  const others = sciences.filter(s => s.id !== book.scienceId)
+  const [sci, setSci] = useState(others[0]?.id ?? '')
+  const [other, setOther] = useState('')
+  const [dir, setDir] = useState<'from' | 'to'>('from')
+  const [type, setType] = useState<XLinkType>('method')
+  const [note, setNote] = useState('')
+  const [error, setError] = useState('')
+  const candidates = allBooks.filter(b => b.scienceId === sci).sort((a, b) => a.death - b.death)
+  if (!others.length) return <div className="card small muted">أضف علماً آخر أولاً لتربط به هذا الكتاب.</div>
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    if (!other) return setError('اختر الكتاب من العلم الآخر.')
+    await db.xlinks.add({ id: newId(), from: dir === 'from' ? other : book.id, to: dir === 'from' ? book.id : other, type, note: note.trim(), createdAt: Date.now() })
+    onDone()
+  }
+  return (
+    <form className="card" onSubmit={submit} noValidate>
+      <div className="row">
+        <label className="field"><span>العلم الآخر</span>
+          <select id="xl-sci" className="select" value={sci} onChange={e => { setSci(e.target.value); setOther('') }}>
+            {others.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </label>
+        <label className="field"><span>الكتاب</span>
+          <select id="xl-book" className="select" value={other} onChange={e => { setOther(e.target.value); setError('') }}>
+            <option value="">اختر</option>
+            {candidates.map(b => <option key={b.id} value={b.id}>{b.title} ({yr(b)})</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="row">
+        <label className="field"><span>الاتجاه</span>
+          <select id="xl-dir" className="select" value={dir} onChange={e => setDir(e.target.value as 'from' | 'to')}>
+            <option value="from">أخذ هذا الكتاب عنه</option>
+            <option value="to">أثّر هذا الكتاب فيه</option>
+          </select>
+        </label>
+        <label className="field"><span>نوع الصلة</span>
+          <select id="xl-type" className="select" value={type} onChange={e => setType(e.target.value as XLinkType)}>
+            {(Object.keys(XLINK_TYPES) as XLinkType[]).map(k => <option key={k} value={k}>{XLINK_TYPES[k]}</option>)}
+          </select>
+        </label>
+      </div>
+      <label className="field"><span>المستند</span><input id="xl-note" className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="مثل: المقدمة المنطقية في أول الكتاب" /></label>
       {error && <p className="warn" role="alert" style={{ margin: 0 }}>{error}</p>}
       <div className="row"><button className="btn primary" type="submit">إضافة الصلة</button><button className="btn" type="button" onClick={onDone}>إلغاء</button></div>
     </form>

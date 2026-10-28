@@ -504,3 +504,9 @@ select.select { padding-right: 14px; line-height: 1.4; }
 
 .side-sci.is-hidden { opacity: .7; }
 .sidebar a.side-sci svg { width: 15px; height: 15px; margin-right: auto; }
+
+.author-field { position: relative; }
+.suggest { position: absolute; inset: auto 0 auto 0; top: 82px; z-index: 20; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); overflow: hidden; display: flex; flex-direction: column; }
+.suggest-item { text-align: right; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 14px; cursor: pointer; font: inherit; color: var(--ink); }
+.suggest-item:last-child { border-bottom: 0; }
+.suggest-item:hover, .suggest-item:focus { background: var(--accent-soft); outline: none; }
