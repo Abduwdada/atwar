@@ -97,8 +97,18 @@ export async function importAll(data: unknown): Promise<number> {
   return b.passages.length
 }
 
-// يستبدل كل ما على الجهاز بنسخة أخرى، ويُستعمل عند جلب البيانات المنشورة
+// ما يُنشر للزوار: كل شيء عدا العلوم المخفية وما فيها
+export function publishable(b: Backup): Backup {
+  const hidden = new Set(b.sciences.filter(s => s.hidden).map(s => s.id))
+  const keep = <T extends { scienceId: string }>(xs: T[]) => xs.filter(x => !hidden.has(x.scienceId))
+  return { ...b, sciences: b.sciences.filter(s => !hidden.has(s.id)), books: keep(b.books), issues: keep(b.issues), passages: keep(b.passages), links: keep(b.links) }
+}
+
+// يستبدل ما على الجهاز بالنسخة المنشورة، ويُبقي العلوم المخفية لأنها لا تُنشر أصلاً
 export async function replaceAll(b: Backup) {
+  const local = await exportAll()
+  const hidden = new Set(local.sciences.filter(s => s.hidden).map(s => s.id))
+  const mine = <T extends { scienceId: string }>(xs: T[]) => xs.filter(x => hidden.has(x.scienceId))
   await db.transaction('rw', [db.sciences, db.books, db.issues, db.passages, db.links, db.groups], async () => {
     await Promise.all([db.sciences.clear(), db.books.clear(), db.issues.clear(), db.passages.clear(), db.links.clear(), db.groups.clear()])
     await db.groups.bulkAdd(b.groups ?? [])
@@ -107,6 +117,11 @@ export async function replaceAll(b: Backup) {
     await db.issues.bulkAdd(b.issues ?? [])
     await db.passages.bulkAdd(b.passages ?? [])
     await db.links.bulkAdd(b.links ?? [])
+    await db.sciences.bulkPut(local.sciences.filter(s => hidden.has(s.id)))
+    await db.books.bulkPut(mine(local.books))
+    await db.issues.bulkPut(mine(local.issues))
+    await db.passages.bulkPut(mine(local.passages))
+    await db.links.bulkPut(mine(local.links))
   })
 }
 

@@ -30,6 +30,7 @@ export default function ScienceShell() {
         <div className="sci-title">
           <Link to="/" className="eyebrow" style={{ textDecoration: 'none' }}>العلوم</Link>
           <h1>{science.name}</h1>
+          {canEdit && science.hidden && <span className="badge mine" style={{ alignSelf: 'flex-start' }}><Icon.EyeOff />مخفي عن الزوار · غيّره من إعدادات العلم</span>}
           <span className="small muted">
             {[count(books.length, 'كتاب', 'كتابان', 'كتب', 'كتاباً'), count(issues.length, 'مسألة', 'مسألتان', 'مسائل', 'مسألة'), count(passages.length, 'نص', 'نصان', 'نصوص', 'نصاً')].join(' · ')}
             {first && last && first !== last && ` · من ${ar(first.death)}هـ إلى ${ar(last.death)}هـ`}

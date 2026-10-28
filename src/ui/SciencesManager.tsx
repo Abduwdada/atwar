@@ -87,11 +87,12 @@ export default function SciencesManager() {
       </div>
 
       <div className="card list-editor">
-        <div><strong>ترتيب العلوم</strong><div className="small muted">رتّبها بالأسهم، واختر مجموعة كل علم.</div></div>
+        <div><strong>ترتيب العلوم</strong><div className="small muted">رتّبها بالأسهم، واختر مجموعة كل علم، والعين تنشره أو تخفيه عن الزوار.</div></div>
         <div className="list">
           {sciences.map((s, i) => (
             <div className="item le-row" key={s.id}>
-              <div className="grow"><div className="title">{s.name}</div></div>
+              <div className="grow"><div className="title">{s.name}</div><div className="meta">{s.hidden ? 'مخفي عن الزوار' : 'منشور'}</div></div>
+              <button className="icon-btn" onClick={() => db.sciences.update(s.id, { hidden: s.hidden ? undefined : true })} aria-label={s.hidden ? `نشر ${s.name}` : `إخفاء ${s.name}`} title={s.hidden ? 'مخفي: اضغط لنشره' : 'منشور: اضغط لإخفائه'}>{s.hidden ? <Icon.EyeOff /> : <Icon.Eye />}</button>
               <select id={`sci-grp-${s.id}`} className="select sci-grp" value={s.groupId ?? ''} onChange={e => setGroup(s, e.target.value)} aria-label={`مجموعة ${s.name}`}>
                 <option value="">بلا مجموعة</option>
                 {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}

@@ -49,7 +49,7 @@ function Shell() {
         {groupSciences(sciences, groups).map(({ group, items }) => (
           <div key={group?.id ?? 'rest'} className="side-block">
             <div className="side-group">{group?.name ?? (groups.length ? 'علوم أخرى' : 'العلوم المرصودة')}</div>
-            {items.map(s => <NavLink key={s.id} to={`/s/${s.id}`} className="side-sci">{s.name}</NavLink>)}
+            {items.map(s => <NavLink key={s.id} to={`/s/${s.id}`} className={'side-sci' + (s.hidden ? ' is-hidden' : '')}>{s.name}{s.hidden && <Icon.EyeOff />}</NavLink>)}
           </div>
         ))}
         <div className="side-spacer" />

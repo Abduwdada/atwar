@@ -19,7 +19,8 @@ export default function Landing() {
     e.preventDefault()
     if (!name.trim()) return setError('اكتب اسم العلم.')
     const id = newId()
-    await db.sciences.add({ id, name: name.trim(), createdAt: Date.now() })
+    // العلم الجديد يبدأ مخفياً حتى يقرر المؤلف نشره
+    await db.sciences.add({ id, name: name.trim(), hidden: true, createdAt: Date.now() })
     nav(`/s/${id}/books`)
   }
 
@@ -57,6 +58,7 @@ export default function Landing() {
               return (
                 <button key={s.id} className="science-card" onClick={() => open(s.id)}>
                   <span className="science-name">{s.name}</span>
+                  {s.hidden && <span className="badge mine"><Icon.EyeOff />مخفي عن الزوار</span>}
                   <span className="small muted">
                     {st ? [count(st.books, 'كتاب', 'كتابان', 'كتب', 'كتاباً'), count(st.issues, 'مسألة', 'مسألتان', 'مسائل', 'مسألة'), count(st.passages, 'نص', 'نصان', 'نصوص', 'نصاً')].join(' · ') : 'لم تُضف نصوص بعد'}
                   </span>

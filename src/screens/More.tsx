@@ -268,6 +268,21 @@ export function ScienceSettings() {
 
   return (
     <section className="stack narrow">
+      <div className="card">
+        <div className="setting">
+          <span>ظهور العلم للزوار</span>
+          <div className="seg" role="radiogroup" id="sci-visible">
+            <button role="radio" aria-checked={!science.hidden} className={!science.hidden ? 'on' : ''} onClick={() => db.sciences.update(science.id, { hidden: undefined })}>منشور</button>
+            <button role="radio" aria-checked={!!science.hidden} className={science.hidden ? 'on' : ''} onClick={() => db.sciences.update(science.id, { hidden: true })}>مخفي</button>
+          </div>
+        </div>
+        <span className="small muted">
+          {science.hidden
+            ? 'العلم على جهازك فقط، ولا يدخل في النسخة المنشورة. انقله إلى «منشور» ثم اضغط «نشر» ليظهر للزوار.'
+            : 'العلم يظهر للزوار بعد كل نشر. إن أخفيته ثم نشرت، يختفي من المنصة العامة ويبقى عندك.'}
+        </span>
+      </div>
+
       <form className="card" onSubmit={save} noValidate>
         <label className="field"><span>اسم العلم</span>
           <input id="sci-name" className="input" value={name} onChange={e => { setName(e.target.value); setError('') }} />

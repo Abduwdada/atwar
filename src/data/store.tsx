@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, datasetHash, exportAll, hasLocalWork, replaceAll, type Backup } from './db'
+import { db, datasetHash, exportAll, hasLocalWork, publishable, replaceAll, type Backup } from './db'
 import { SAMPLE_SCIENCE_ID } from './seed'
 import {
   ConflictError, fetchPublished, getSync, getToken, publishRemote, pullRemote, remoteSha, setSync, setToken,
@@ -95,7 +95,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const lPassages = useLiveQuery(async () => (owner ? await db.passages.where({ scienceId }).toArray() : undefined), [owner, scienceId])
   const lLinks = useLiveQuery(async () => (owner ? await db.links.where({ scienceId }).toArray() : undefined), [owner, scienceId])
   const allLocal = useLiveQuery(async () => (owner ? { books: await db.books.toArray(), issues: await db.issues.toArray(), passages: await db.passages.toArray() } : undefined), [owner])
-  const localHash = useLiveQuery(async () => (owner ? datasetHash(await exportAll()) : undefined), [owner])
+  const localHash = useLiveQuery(async () => (owner ? datasetHash(publishable(await exportAll())) : undefined), [owner])
 
   const sciences = useMemo(() => {
     const list = owner ? lSciences : remote?.sciences
@@ -141,7 +141,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!token) return
     const current = await remoteSha(token)
     if (!force && sync && current !== sync.sha) throw new ConflictError('نُشرت نسخة أحدث من جهاز آخر.')
-    const data = await exportAll()
+    const data = publishable(await exportAll())
     const sha = await publishRemote(token, data, current, message)
     const s = { sha, hash: datasetHash(data), at: Date.now() }
     setSync(s)

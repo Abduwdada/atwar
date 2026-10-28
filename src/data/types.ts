@@ -16,6 +16,7 @@ export interface Science {
   description?: string
   groupId?: string
   order?: number // ترتيبه في القوائم، وإلا فبحسب وقت الإضافة
+  hidden?: boolean // مخفي عن الزوار: لا يدخل في النسخة المنشورة
   // مواضع الكتب في الشجرة كما رتبها المؤلف بالسحب، لكل طريقة عرض على حدة
   treeLayout?: Record<string, { x: number; y: number }> // العمودي (الصيغة الأولى)
   treeLayoutH?: Record<string, { x: number; y: number }> // الأفقي
