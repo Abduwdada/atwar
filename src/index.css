@@ -510,3 +510,20 @@ select.select { padding-right: 14px; line-height: 1.4; }
 .suggest-item { text-align: right; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 14px; cursor: pointer; font: inherit; color: var(--ink); }
 .suggest-item:last-child { border-bottom: 0; }
 .suggest-item:hover, .suggest-item:focus { background: var(--accent-soft); outline: none; }
+
+/* مراحل تطور العلم */
+.phasebar { display: flex; gap: 3px; border-radius: 12px; overflow: hidden; }
+.phase { min-width: 0; flex-basis: 0; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: color-mix(in srgb, var(--accent) var(--shade), var(--surface)); color: var(--ink); }
+.phase b { font-size: 14px; font-weight: 600; line-height: 1.4; }
+.phase span { font-size: 12.5px; color: var(--ink); opacity: .8; }
+.phasebar.compact .phase { padding: 6px 8px; }
+.phasebar.compact .phase b { font-size: 12.5px; }
+.phase-rows { display: flex; flex-direction: column; gap: 10px; }
+.phase-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.phase-row > .input { flex: 1 1 180px; min-height: 42px; }
+.phase-row .th-input .input { width: 72px; }
+.phase-note { flex-basis: 100%; }
+.suggest-box { background: var(--accent-soft); border-color: transparent; }
+.matrix.methods td.blank { padding: 8px; }
+.heat-cell { min-width: 44px; min-height: 36px; border: 0; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600; color: var(--ink); background: color-mix(in srgb, var(--accent) var(--fill), var(--surface)); font-variant-numeric: tabular-nums; }
+.heat-cell.on { outline: 2px solid var(--ink); }

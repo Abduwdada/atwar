@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { sp } from '../nav'
 import { useListPrefs } from '../data/prefs'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { db, newId } from '../data/db'
 import { useStore } from '../data/store'
 import { Badge, ConfirmButton, PageHead, ar, count, pct, yr } from '../ui/bits'
@@ -15,9 +15,10 @@ const centuryName = (d: number) => `القرن ${CENTURY[Math.floor(d / 100)] ??
 export function BookList() {
   const { books, passages, canEdit } = useStore()
   const [q, setQ] = useState('')
-  const [adding, setAdding] = useState(false)
+  const [params] = useSearchParams()
+  const [adding, setAdding] = useState(params.get('new') === '1')
   const nav = useNavigate()
-  const [o, set] = useListPrefs('books', { sort: 'death', school: '', kind: '', group: true })
+  const [o, set] = useListPrefs('books', { sort: 'death', school: '', kind: '', method: '', group: true })
   const counts = useMemo(() => {
     const m = new Map<string, number>()
     passages.forEach(p => m.set(p.bookId, (m.get(p.bookId) ?? 0) + 1))
@@ -25,9 +26,10 @@ export function BookList() {
   }, [passages])
   const schools = [...new Set(books.map(b => b.school).filter(Boolean))] as string[]
   const kinds = [...new Set(books.map(b => b.kind).filter(Boolean))] as string[]
+  const methods = [...new Set(books.map(b => b.method).filter(Boolean))] as string[]
   const t = q.trim()
   const shown = books
-    .filter(b => (!t || b.title.includes(t) || b.author.includes(t)) && (!o.school || b.school === o.school) && (!o.kind || b.kind === o.kind))
+    .filter(b => (!t || b.title.includes(t) || b.author.includes(t)) && (!o.school || b.school === o.school) && (!o.kind || b.kind === o.kind) && (!o.method || b.method === o.method))
     .sort((x, y) => o.sort === 'title' ? x.title.localeCompare(y.title, 'ar')
       : o.sort === 'texts' ? (counts.get(y.id) ?? 0) - (counts.get(x.id) ?? 0)
       : o.sort === 'death-desc' ? y.death - x.death : x.death - y.death)
@@ -66,6 +68,13 @@ export function BookList() {
             </select>
           </label>
         )}
+        {methods.length > 1 && (
+          <label className="ctl"><span>المنهج</span>
+            <select id="books-method" value={o.method} onChange={e => set('method', e.target.value)}>
+              <option value="">الكل</option>{methods.map(x => <option key={x}>{x}</option>)}
+            </select>
+          </label>
+        )}
         {o.sort.startsWith('death') && (
           <label className="check ctl-check"><input id="books-group" type="checkbox" checked={o.group} onChange={e => set('group', e.target.checked)} />تجميع بالقرون</label>
         )}
@@ -78,7 +87,7 @@ export function BookList() {
             {list.map(b => (
               <Link key={b.id} className="item" to={sp(`/books/${b.id}`)}>
                 <span className="num muted year-col">{ar(b.death)}هـ</span>
-                <div className="grow"><div className="title">{b.title}</div><div className="meta">{[b.author, b.school, b.kind].filter(Boolean).join(' · ')}</div></div>
+                <div className="grow"><div className="title">{b.title}</div><div className="meta">{[b.author, b.school, b.kind, b.method].filter(Boolean).join(' · ')}</div></div>
                 <span className="end">{count(counts.get(b.id) ?? 0, 'نص', 'نصان', 'نصوص', 'نصاً')}</span>
                 <Icon.ChevronIn />
               </Link>

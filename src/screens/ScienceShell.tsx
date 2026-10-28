@@ -19,9 +19,11 @@ export default function ScienceShell() {
   if (!ready || science?.id !== sid) return <div className="empty">جارٍ التحميل…</div>
 
   const first = books[0], last = books.at(-1)
-  const tabs: [string, string][] = [
-    ['', 'نظرة عامة'], ['/books', 'الكتب'], ['/issues', 'المسائل'], ['/matrix', 'المصفوفة'], ['/tree', 'الشجرة'], ['/compare', 'المقارنة'],
-  ]
+  const byBooks = science.mode === 'books'
+  const hasMethods = books.some(b => b.method)
+  const tabs: [string, string][] = byBooks
+    ? [['', 'نظرة عامة'], ['/books', 'الكتب'], ['/methods', 'مناهج التأليف'], ['/tree', 'الشجرة']]
+    : [['', 'نظرة عامة'], ['/books', 'الكتب'], ['/issues', 'المسائل'], ['/matrix', 'المصفوفة'], ['/tree', 'الشجرة'], ['/compare', 'المقارنة'], ...(hasMethods ? [['/methods', 'مناهج التأليف'] as [string, string]] : [])]
   if (canEdit) tabs.push(['/settings', 'إعدادات العلم'])
 
   return (
@@ -32,20 +34,23 @@ export default function ScienceShell() {
           <h1>{science.name}</h1>
           {canEdit && science.hidden && <span className="badge mine" style={{ alignSelf: 'flex-start' }}><Icon.EyeOff />مخفي عن الزوار · غيّره من إعدادات العلم</span>}
           <span className="small muted">
-            {[count(books.length, 'كتاب', 'كتابان', 'كتب', 'كتاباً'), count(issues.length, 'مسألة', 'مسألتان', 'مسائل', 'مسألة'), count(passages.length, 'نص', 'نصان', 'نصوص', 'نصاً')].join(' · ')}
+            {(science.mode === 'books' ? [count(books.length, 'كتاب', 'كتابان', 'كتب', 'كتاباً')] : [count(books.length, 'كتاب', 'كتابان', 'كتب', 'كتاباً'), count(issues.length, 'مسألة', 'مسألتان', 'مسائل', 'مسألة'), count(passages.length, 'نص', 'نصان', 'نصوص', 'نصاً')]).join(' · ')}
             {first && last && first !== last && ` · من ${ar(first.death)}هـ إلى ${ar(last.death)}هـ`}
           </span>
           {science.description && <p className="sci-desc">{science.description}</p>}
         </div>
         <div className="sci-actions">
           <Link to={sp('/search')} className="icon-btn" aria-label="البحث في هذا العلم"><Icon.Search /></Link>
-          {canEdit && <Link to={sp('/add')} className="btn primary sm"><Icon.Plus />نص</Link>}
+          {canEdit && (byBooks
+            ? <Link to={sp('/books?new=1')} className="btn primary sm"><Icon.Plus />كتاب</Link>
+            : <Link to={sp('/add')} className="btn primary sm"><Icon.Plus />نص</Link>)}
         </div>
       </header>
       <nav className="sci-tabs" aria-label="أقسام العلم">
         {tabs.map(([p, label]) => <NavLink key={p} to={sp(p)} end={p === ''}>{label}</NavLink>)}
       </nav>
-      <Outlet />
+      {/* إعادة بناء الأقسام عند الانتقال من علم إلى آخر */}
+      <div key={sid} className="science-body"><Outlet /></div>
     </div>
   )
 }

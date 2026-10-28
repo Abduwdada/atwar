@@ -6,7 +6,8 @@ import { Link } from 'react-router-dom'
 import { useStore } from '../data/store'
 import { tokenize } from '../engine/arabic'
 import { compare } from '../engine/compare'
-import { Badge, DiffText, ar, pct, yr } from '../ui/bits'
+import { Badge, DiffText, ar, count, pct, yr } from '../ui/bits'
+import PhaseBar from '../ui/PhaseBar'
 import { useListPrefs } from '../data/prefs'
 
 export function Matrix() {
@@ -507,6 +508,63 @@ export function Compare() {
           </div>
         )}
       </div>
+    </>
+  )
+}
+
+// مناهج التأليف عبر القرون: متى ظهر كل منهج، ومتى غلب على التصنيف
+export function Methods() {
+  const { books, lists, science } = useStore()
+  const [cell, setCell] = useState<{ m: string; c: number } | null>(null)
+  const used = lists.methods.filter(m => books.some(b => b.method === m))
+  const noMethod = books.filter(b => !b.method).length
+  const cents = [...new Set(books.map(b => Math.floor(b.death / 100)))].sort((a, b) => a - b)
+  const inCell = (m: string, c: number) => books.filter(b => b.method === m && Math.floor(b.death / 100) === c)
+  const max = Math.max(1, ...used.flatMap(m => cents.map(c => inCell(m, c).length)))
+  if (!used.length) return <div className="empty card">لم تُحدَّد طريقة التأليف لأي كتاب بعد. حدّدها في نموذج الكتاب، وأضف المناهج من «إعدادات العلم».</div>
+  const sel = cell ? inCell(cell.m, cell.c).sort((a, b) => a.death - b.death) : []
+  return (
+    <>
+      {science?.phases?.length ? <PhaseBar phases={science.phases} books={books} compact /> : null}
+      <p className="small muted" style={{ margin: 0 }}>المناهج صفوفاً والقرون أعمدة، ولون الخانة بعدد الكتب. اضغط خانة لترى كتبها.{noMethod ? ` ${count(noMethod, 'كتاب', 'كتابان', 'كتب', 'كتاباً')} بلا منهج محدد.` : ''}</p>
+      <div className="scroller">
+        <table className="matrix methods">
+          <thead><tr><th className="corner">المنهج</th>{cents.map(c => <th key={c}>القرن {ORD[c] ?? ar(c + 1)}<small>{ar(c * 100)}–{ar(c * 100 + 100)}هـ</small></th>)}</tr></thead>
+          <tbody>
+            {used.map(m => {
+              const first = books.filter(b => b.method === m).sort((a, b) => a.death - b.death)[0]
+              return (
+                <tr key={m}>
+                  <th className="rowh" scope="row">{m}<small>أول ظهور: {first.title} ({ar(first.death)}هـ)</small></th>
+                  {cents.map(c => {
+                    const n = inCell(m, c).length
+                    const on = cell?.m === m && cell.c === c
+                    return (
+                      <td key={c} className="blank">
+                        {n ? <button className={'heat-cell' + (on ? ' on' : '')} style={{ ['--fill' as string]: `${Math.round(15 + 70 * n / max)}%` }} onClick={() => setCell(on ? null : { m, c })}>{ar(n)}</button> : '·'}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      {cell && (
+        <div className="stack tight">
+          <div className="section-label">{cell.m} في القرن {ORD[cell.c] ?? ar(cell.c + 1)}</div>
+          <div className="list">
+            {sel.map(b => (
+              <Link key={b.id} className="item" to={sp(`/books/${b.id}`)}>
+                <span className="num muted year-col">{ar(b.death)}هـ</span>
+                <div className="grow"><div className="title">{b.title}</div><div className="meta">{b.author}</div></div>
+                <Icon.ChevronIn />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </>
   )
 }

@@ -2,7 +2,7 @@ import { db } from './db'
 import type { ListKey } from './types'
 
 // القوائم محفوظة مع العلم؛ وتعديل عنصر أو حذفه يسري على كل ما يحمله من كتب ومسائل
-const FIELD = { schools: 'school', kinds: 'kind', sections: 'section' } as const
+const FIELD = { schools: 'school', kinds: 'kind', sections: 'section', methods: 'method' } as const
 
 async function current(sid: string) {
   return (await db.sciences.get(sid))?.lists ?? {}

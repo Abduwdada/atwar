@@ -73,3 +73,19 @@ describe('تحليل العينة', () => {
     expect(a.rootOf('sample-waraqat')).toBe('sample-mutamad')
   })
 })
+
+describe('اقتراح مراحل التطور', () => {
+  it('يقترح ثلاث مراحل متتالية على الأقل من العينة', async () => {
+    const { suggestPhases } = await import('./phases')
+    const s = buildSample(0)
+    const a = analyseScience(s.passages, s.books)
+    const { phases } = suggestPhases(s.books, [...a.passages.values()])
+    expect(phases.length).toBeGreaterThanOrEqual(3)
+    for (let i = 1; i < phases.length; i++) expect(phases[i].from).toBe(phases[i - 1].to)
+    expect(phases[0].from).toBe(436)
+  })
+  it('يرفض الاقتراح مع قلة الكتب', async () => {
+    const { suggestPhases } = await import('./phases')
+    expect(suggestPhases(buildSample(0).books.slice(0, 2)).phases).toEqual([])
+  })
+})

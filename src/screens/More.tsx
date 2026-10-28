@@ -1,5 +1,8 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 import ListEditor from '../ui/ListEditor'
+import PhaseBar from '../ui/PhaseBar'
+import { suggestPhases, type Suggestion } from '../engine/phases'
+import type { Phase } from '../data/types'
 import SciencesManager from '../ui/SciencesManager'
 import { toNum } from '../ui/forms'
 import { analyseScience } from '../engine/analyse'
@@ -283,6 +286,24 @@ export function ScienceSettings() {
         </span>
       </div>
 
+      <div className="card">
+        <div className="setting">
+          <span>طريقة الرصد</span>
+          <div className="seg" role="radiogroup" id="sci-mode">
+            <button role="radio" aria-checked={science.mode !== 'books'} className={science.mode !== 'books' ? 'on' : ''} onClick={() => db.sciences.update(science.id, { mode: undefined })}>المسائل ونصوصها</button>
+            <button role="radio" aria-checked={science.mode === 'books'} className={science.mode === 'books' ? 'on' : ''} onClick={() => db.sciences.update(science.id, { mode: 'books' })}>الكتب ومناهج التأليف</button>
+          </div>
+        </div>
+        <span className="small muted">
+          {science.mode === 'books'
+            ? 'يُرصد العلم بكتبه وطرق التأليف فيها، كالمسانيد والسنن في الحديث، والتفسير بالمأثور وبالرأي. يظهر تبويب «مناهج التأليف» بدل المسائل والمصفوفة.'
+            : 'يُرصد العلم بنصوص مسائله ومصطلحاته في كتبه، ومقارنة كل نص بما سبقه.'}
+        </span>
+      </div>
+
+      <div className="section-label">مراحل تطور العلم</div>
+      <PhasesEditor />
+
       <form className="card" onSubmit={save} noValidate>
         <label className="field"><span>اسم العلم</span>
           <input id="sci-name" className="input" value={name} onChange={e => { setName(e.target.value); setError('') }} />
@@ -299,6 +320,7 @@ export function ScienceSettings() {
       <ListEditor k="schools" />
       <ListEditor k="kinds" />
       <ListEditor k="sections" />
+      <ListEditor k="methods" />
 
       <div className="section-label">حدود التصنيف</div>
       <ThresholdsEditor />
@@ -379,6 +401,69 @@ function ThresholdsEditor() {
       <div className="row">
         <button className="btn primary" onClick={save}>{saved ? 'حُفظت' : 'حفظ الحدود'}</button>
         <button className="btn ghost" onClick={reset}>الحدود الافتراضية</button>
+      </div>
+    </div>
+  )
+}
+
+function PhasesEditor() {
+  const { science, books, analysis } = useStore()
+  const [rows, setRows] = useState<Phase[]>(science?.phases ?? [])
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null)
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+  if (!science) return null
+  const set = (i: number, patch: Partial<Phase>) => { setRows(r => r.map((p, k) => (k === i ? { ...p, ...patch } : p))); setError(''); setSaved(false) }
+
+  async function save() {
+    for (let i = 0; i < rows.length; i++) {
+      const p = rows[i]
+      if (!p.name.trim()) return setError('لكل مرحلة اسم.')
+      if (!(p.from < p.to)) return setError(`في «${p.name}» يجب أن تكون البداية قبل النهاية.`)
+      if (i && p.from < rows[i - 1].from) return setError('رتّب المراحل من الأقدم إلى الأحدث.')
+    }
+    await db.sciences.update(science!.id, { phases: rows.length ? rows.map(p => ({ ...p, name: p.name.trim() })) : undefined })
+    setSaved(true)
+  }
+
+  return (
+    <div className="card">
+      <span className="small muted">مراحل يمر بها العلم، كالنشأة والتكوين ثم التطور والتوسع ثم التمكن والنضج. تظهر في نظرة العلم، وبها تُقارن العلوم في خارطة التطور. اقترحها من بياناتك ثم عدّلها بما تراه.</span>
+      {rows.length > 0 && (
+        <div className="phase-rows">
+          {rows.map((p, i) => (
+            <div className="phase-row" key={i}>
+              <input id={`ph-name-${i}`} className="input" value={p.name} onChange={e => set(i, { name: e.target.value })} aria-label="اسم المرحلة" />
+              <label className="th-input">من<input id={`ph-from-${i}`} className="input num" inputMode="numeric" value={ar(p.from)} onChange={e => set(i, { from: toNum(e.target.value) || 0 })} /></label>
+              <label className="th-input">إلى<input id={`ph-to-${i}`} className="input num" inputMode="numeric" value={ar(p.to)} onChange={e => set(i, { to: toNum(e.target.value) || 0 })} />هـ</label>
+              <button className="icon-btn" onClick={() => setRows(r => r.filter((_, k) => k !== i))} aria-label="حذف المرحلة"><Icon.Trash /></button>
+              {p.note && <span className="small muted phase-note">{p.note}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {suggestion && (
+        <div className="card suggest-box">
+          {suggestion.phases.length ? (
+            <>
+              <strong>الاقتراح من بيانات العلم</strong>
+              <PhaseBar phases={suggestion.phases} books={books} />
+              <ul className="small" style={{ margin: 0, paddingRight: 18 }}>
+                {suggestion.phases.map((p, i) => <li key={i}><b>{p.name}</b> ({ar(p.from)}–{ar(p.to)}هـ): {p.note}</li>)}
+              </ul>
+              <div className="row">
+                <button className="btn primary sm" onClick={() => { setRows(suggestion.phases); setSuggestion(null); setSaved(false) }}>اعتماد الاقتراح</button>
+                <button className="btn sm" onClick={() => setSuggestion(null)}>إلغاء</button>
+              </div>
+            </>
+          ) : <span className="small">{suggestion.reason}</span>}
+        </div>
+      )}
+      {error && <p className="warn" role="alert" style={{ margin: 0 }}>{error}</p>}
+      <div className="row">
+        <button className="btn sm" onClick={() => setSuggestion(suggestPhases(books, [...analysis.passages.values()]))}>اقتراح من البيانات</button>
+        <button className="btn sm" onClick={() => { const last = rows.at(-1); setRows(r => [...r, { name: 'مرحلة جديدة', from: last?.to ?? (books[0]?.death ?? 100), to: (last?.to ?? (books[0]?.death ?? 100)) + 100 }]) }}><Icon.Plus />مرحلة</button>
+        <button className="btn sm primary" onClick={save}>{saved ? 'حُفظت' : 'حفظ المراحل'}</button>
       </div>
     </div>
   )

@@ -11,7 +11,7 @@ import Add from './screens/Add'
 import { IssueList, IssuePage } from './screens/Issues'
 import { BookList, BookPage } from './screens/Books'
 import PassageEdit from './screens/PassageEdit'
-import { Compare, Matrix, Tree } from './screens/Views'
+import { Compare, Matrix, Methods, Tree } from './screens/Views'
 import Settings, { ScienceSettings } from './screens/More'
 import Search from './screens/Search'
 import { groupSciences } from './ui/SciencesManager'
@@ -79,10 +79,11 @@ function Shell() {
               <Route path="matrix" element={<Matrix />} />
               <Route path="tree" element={<Tree />} />
               <Route path="compare" element={<Compare />} />
+              <Route path="methods" element={<Methods />} />
               <Route path="search" element={<SubKeyed el={k => <Search key={k} />} />} />
               <Route path="settings" element={canEdit ? <ScienceSettings /> : <Navigate to=".." replace />} />
               {/* مفتاح البحث يعيد بناء شاشة الإضافة عند الانتقال من نص إلى آخر */}
-              <Route path="add" element={canEdit ? <SubKeyed el={k => <Add key={k} />} /> : <Navigate to="/settings" replace />} />
+              <Route path="add" element={canEdit ? (science?.mode === 'books' ? <Navigate to="../books?new=1" replace /> : <SubKeyed el={k => <Add key={k} />} />) : <Navigate to="/settings" replace />} />
               <Route path="passages/:id/edit" element={canEdit ? <PassageEdit /> : <Navigate to=".." replace />} />
             </Route>
             <Route path="/science" element={<Legacy to="" />} />

@@ -171,6 +171,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       schools: merge(sci?.lists?.schools, books.map(b => b.school)),
       kinds: merge(sci?.lists?.kinds, books.map(b => b.kind), BOOK_KINDS),
       sections: merge(sci?.lists?.sections, issues.map(i => i.section)),
+      methods: merge(sci?.lists?.methods, books.map(b => b.method)),
     }
     const ready = owner ? !!(lSciences && lGroups && lBooks && lIssues && lPassages && lLinks) : !!remote
     return {

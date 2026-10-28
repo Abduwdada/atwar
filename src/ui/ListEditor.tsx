@@ -8,6 +8,7 @@ import * as Icon from './icons'
 const META: Record<ListKey, { title: string; hint: string; unit: [string, string, string, string]; placeholder: string }> = {
   schools: { title: 'المذاهب والمدارس', hint: 'تظهر في نموذج الكتاب، وتُلوَّن بها الشجرة.', unit: ['كتاب', 'كتابان', 'كتب', 'كتاباً'], placeholder: 'مثل: حنبلي، أو بصري' },
   kinds: { title: 'أنواع الكتب', hint: 'مثل المتن والشرح والحاشية.', unit: ['كتاب', 'كتابان', 'كتب', 'كتاباً'], placeholder: 'مثل: منظومة' },
+  methods: { title: 'مناهج التأليف', hint: 'طريقة تصنيف الكتاب، كالمسند والسنن والجامع، أو التفسير بالمأثور وبالرأي.', unit: ['كتاب', 'كتابان', 'كتب', 'كتاباً'], placeholder: 'مثل: المسانيد' },
   sections: { title: 'الأبواب', hint: 'تُجمع تحتها المسائل، وترتيبها هنا هو ترتيبها في القوائم.', unit: ['مسألة', 'مسألتان', 'مسائل', 'مسألة'], placeholder: 'مثل: الأدلة المتفق عليها' },
 }
 
@@ -22,7 +23,7 @@ export default function ListEditor({ k }: { k: ListKey }) {
   if (!science) return null
   const sid = science.id
   const used = (x: string) => k === 'sections' ? issues.filter(i => i.section === x).length
-    : books.filter(b => (k === 'schools' ? b.school : b.kind) === x).length
+    : books.filter(b => (k === 'schools' ? b.school : k === 'methods' ? b.method : b.kind) === x).length
 
   async function add(e: FormEvent) {
     e.preventDefault()

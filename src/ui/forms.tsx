@@ -45,7 +45,7 @@ export function ListSelect({ id, label, k, value, onChange }: { id: string; labe
 export const toNum = (s: string) => Number(s.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).trim())
 
 export function BookForm({ book, onSaved, onCancel }: { book?: Book; onSaved: (b: Book) => void; onCancel?: () => void }) {
-  const { science } = useStore()
+  const { science, lists } = useStore()
   const [title, setTitle] = useState(book?.title ?? '')
   const [author, setAuthor] = useState(book?.author ?? '')
   const [authorId, setAuthorId] = useState(book?.authorId)
@@ -53,6 +53,7 @@ export function BookForm({ book, onSaved, onCancel }: { book?: Book; onSaved: (b
   const [deathNote, setDeathNote] = useState(book?.deathNote ?? '')
   const [school, setSchool] = useState(book?.school ?? '')
   const [kind, setKind] = useState(book?.kind ?? '')
+  const [method, setMethod] = useState(book?.method ?? '')
   const [error, setError] = useState('')
 
   async function submit(e: FormEvent) {
@@ -64,7 +65,7 @@ export function BookForm({ book, onSaved, onCancel }: { book?: Book; onSaved: (b
     const saved: Book = {
       ...(book ?? { id: newId(), scienceId: science!.id, createdAt: Date.now() }),
       title: title.trim(), author: author.trim(), authorId, death: d,
-      deathNote: deathNote.trim() || undefined, school: school.trim() || undefined, kind: kind || undefined,
+      deathNote: deathNote.trim() || undefined, school: school.trim() || undefined, kind: kind || undefined, method: method || undefined,
     }
     await db.books.put(saved)
     // مؤلف جديد لم يُختر من السجل يُضاف إليه، أو يُربط بمن يطابقه اسماً ووفاة
@@ -92,6 +93,9 @@ export function BookForm({ book, onSaved, onCancel }: { book?: Book; onSaved: (b
         <ListSelect id="bf-school" label="المذهب أو المدرسة" k="schools" value={school} onChange={setSchool} />
         <ListSelect id="bf-kind" label="نوع الكتاب" k="kinds" value={kind} onChange={setKind} />
       </div>
+      {(science?.mode === 'books' || lists.methods.length > 0 || method) && (
+        <ListSelect id="bf-method" label="طريقة التأليف" k="methods" value={method} onChange={setMethod} />
+      )}
       {error && <p className="warn" role="alert" style={{ margin: 0 }}>{error}</p>}
       <div className="row">
         <button className="btn primary" type="submit">{book ? 'حفظ التعديل' : 'إضافة الكتاب'}</button>
