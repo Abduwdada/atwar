@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 import ListEditor from '../ui/ListEditor'
 import PhaseBar from '../ui/PhaseBar'
+import ExcelPanel from '../ui/ExcelPanel'
 import { suggestPhases, type Suggestion } from '../engine/phases'
 import type { Phase } from '../data/types'
 import SciencesManager from '../ui/SciencesManager'
@@ -303,6 +304,9 @@ export function ScienceSettings() {
 
       <div className="section-label">مراحل تطور العلم</div>
       <PhasesEditor />
+
+      <div className="section-label">استيراد وتصدير بالإكسل</div>
+      <ExcelPanel />
 
       <form className="card" onSubmit={save} noValidate>
         <label className="field"><span>اسم العلم</span>
