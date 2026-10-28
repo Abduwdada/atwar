@@ -527,3 +527,17 @@ select.select { padding-right: 14px; line-height: 1.4; }
 .matrix.methods td.blank { padding: 8px; }
 .heat-cell { min-width: 44px; min-height: 36px; border: 0; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600; color: var(--ink); background: color-mix(in srgb, var(--accent) var(--fill), var(--surface)); font-variant-numeric: tabular-nums; }
 .heat-cell.on { outline: 2px solid var(--ink); }
+
+/* خارطة التطور */
+.map-wrap { max-height: 80vh; overflow: auto; }
+.map-wrap svg { display: block; }
+.swl-chip { display: inline-block; width: 18px; border-top: 2.5px solid currentColor; vertical-align: middle; }
+.swl-chip.dash { border-top-style: dashed; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 4px 12px; cursor: pointer; font: inherit; font-size: 14px; color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.ctl-label { color: var(--muted); font-size: 14px; }
+.dim { opacity: .14; }
+.map-cta { display: flex; align-items: center; gap: 12px; padding: 16px 18px; background: var(--accent-soft); border-radius: var(--radius); color: var(--ink); text-decoration: none; }
+.map-cta b { display: block; font-family: var(--f-brand); font-size: 22px; color: var(--accent); }
+.map-cta svg { width: 20px; height: 20px; color: var(--accent); flex: none; }
+.map-cta .grow { flex: 1; display: flex; flex-direction: column; }

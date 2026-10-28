@@ -78,6 +78,10 @@ export default function Landing() {
         )) : <div className="empty card">لم يُنشر أي علم بعد.</div>}
       </section>
 
+      <Link to="/map" className="map-cta">
+        <span className="grow"><b>خارطة التطور</b><span className="small muted">العلوم جنباً إلى جنب على محور زمني واحد، بمراحلها ولحظات التقائها.</span></span>
+        <Icon.ChevronIn />
+      </Link>
       <BridgeScholars />
     </>
   )
