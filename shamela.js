@@ -23,7 +23,9 @@
     say('يُقرأ فهرس الكتاب…')
     const home = doc(await get('/book/' + id))
     const info = home.querySelector('.betaka-index')
-    const cardText = (info ? (info.innerText || info.textContent) : '').split('فهرس الموضوعات')[0].trim()
+    // بطاقة الكتاب: بعد عنوان «بطاقة الكتاب»، وأسطرها مفصولة بفواصل أسطر
+    const cardEl = [...home.querySelectorAll('h3, h4')].find(h => /بطاقة الكتاب/.test(h.textContent))?.nextElementSibling
+    const cardText = cardEl ? doc(cardEl.innerHTML.replace(/<br\s*\/?>/gi, '\n')).body.textContent.split('\n').map(clean).filter(Boolean).join('\n') : ''
     const title = (home.title || '').replace(/ - المكتبة الشاملة.*$/, '')
 
     // الفهرس بفروعه: ما له [+] تُطلب فروعه من الموقع
