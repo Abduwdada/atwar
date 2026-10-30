@@ -64,8 +64,13 @@
     say('يُجمع النص…')
     const bar = document.createElement('div'); box.appendChild(bar)
     btn('إيقاف وحفظ ما جُمع', () => { stop = true })
+    // ثلاث صفحات معاً، ويُحفظ ترتيبها
+    const ahead = new Map()
+    const load = (i) => { if (i < want.length && !ahead.has(i)) ahead.set(i, get('/book/' + id + '/' + want[i])) }
     for (let i = 0; i < want.length && !stop; i++) {
-      const d = doc(await get('/book/' + id + '/' + want[i]))
+      for (let k = i; k < i + 3; k++) load(k)
+      const d = doc(await ahead.get(i))
+      ahead.delete(i)
       const tm = (d.title || '').match(/(?:ج(\d+)\s*-\s*)?ص(\d+)/)
       const nass = d.querySelector('.nass')
       const paras = [], notes = []
@@ -80,7 +85,7 @@
       pages.push({ id: want[i], vol: tm && tm[1] ? +tm[1] : undefined, page: tm ? +tm[2] : undefined, paras, notes })
       const left = Math.round(((Date.now() - started) / (i + 1)) * (want.length - i - 1) / 60000)
       bar.innerHTML = 'الصفحة ' + (i + 1) + ' من ' + want.length + (left > 0 ? ' · بقي نحو ' + left + ' دقيقة' : '') + '<div style="height:6px;background:#e8eeeb;border-radius:3px;margin-top:6px"><div style="height:6px;border-radius:3px;background:#1f6b5a;width:' + Math.round(((i + 1) / want.length) * 100) + '%"></div></div>'
-      await sleep(200)
+      await sleep(80)
     }
 
     const data = { atwar: 'shamela', v: 1, bookId: +id, url: location.origin + '/book/' + id, title, card: cardText, toc, pages, complete: !stop }
